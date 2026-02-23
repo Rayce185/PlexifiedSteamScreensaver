@@ -73,6 +73,21 @@ def init_db(db_path):
                     ("schema_version", str(SCHEMA_VERSION)))
 
 @contextmanager
+DEFAULT_DISPLAY_ELEMENTS = [
+    {"id": "installed_badge", "enabled": True, "order": 0},
+    {"id": "playtime", "enabled": True, "order": 1},
+    {"id": "device_breakdown", "enabled": True, "order": 2},
+    {"id": "last_played", "enabled": True, "order": 3},
+    {"id": "genres", "enabled": True, "order": 4},
+    {"id": "developer", "enabled": True, "order": 5},
+    {"id": "metacritic", "enabled": True, "order": 6},
+    {"id": "release_date", "enabled": True, "order": 7},
+    {"id": "description", "enabled": True, "order": 8},
+    {"id": "controller_support", "enabled": True, "order": 9},
+    {"id": "vr_support", "enabled": True, "order": 10},
+    {"id": "platforms", "enabled": True, "order": 11},
+]
+
 def get_db():
     if DB_PATH is None:
         raise RuntimeError("Database not initialized -- call init_db() first")
@@ -265,7 +280,12 @@ def get_display_elements(account_id):
             SELECT element_id as id, enabled, sort_order as "order"
             FROM display_elements WHERE account_id = ? ORDER BY sort_order
         """, (account_id,)).fetchall()
-        return [{"id": r["id"], "enabled": bool(r["enabled"]), "order": r["order"]} for r in rows]
+        elements = [{"id": r["id"], "enabled": bool(r["enabled"]), "order": r["order"]} for r in rows]
+        if not elements:
+            # Seed defaults on first access
+            set_display_elements(account_id, DEFAULT_DISPLAY_ELEMENTS)
+            return list(DEFAULT_DISPLAY_ELEMENTS)
+        return elements
 
 def set_display_elements(account_id, elements):
     with get_db() as db:

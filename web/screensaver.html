@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HTPC Screensaver</title>
+<title>PSS Screensaver</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;500;600&display=swap');
   :root { --transition: 2.5s; --slide-duration: 12s; }
@@ -72,7 +72,7 @@
     installed_badge(g,m) {
       if(g.installed_htpc) m.appendChild(badge('badge-installed','\u2713 Installed'));
       else if(!g.ever_played) m.appendChild(badge('badge-not-installed','Never installed'));
-      else m.appendChild(badge('badge-not-installed','Not on HTPC'));
+      else m.appendChild(badge('badge-not-installed','Not installed'));
     },
     playtime(g,m) {
       if(g.playtime_hours>0) { addDiv(m); m.appendChild(meta(g.playtime_hours>=1?g.playtime_hours+'h played':Math.round(g.playtime_hours*60)+'m played')); }

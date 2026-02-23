@@ -231,7 +231,7 @@ let ALL=[],exclSet=new Set(),CONFIG={},incF='all',excF='all',saveTO=null,enrichP
 const ALPHA='#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
 const ELEMENTS=[
-  {id:'installed_badge',icon:'\u2705',name:'Install Status',desc:'Shows whether the game is installed on HTPC',example:'\u2713 Installed / Not on HTPC / Never installed',cat:'basic'},
+  {id:'installed_badge',icon:'\u2705',name:'Install Status',desc:'Shows whether the game is installed locally',example:'\u2713 Installed / Not installed / Never installed',cat:'basic'},
   {id:'playtime',icon:'\u23F1',name:'Playtime',desc:'Total hours played across all platforms',example:'142.3h played',cat:'basic'},
   {id:'device_breakdown',icon:'\uD83D\uDCBB',name:'Device Breakdown',desc:'Hours split by PC, Steam Deck, Linux, Mac',example:'PC 98h \u00b7 Deck 44h',cat:'basic'},
   {id:'last_played',icon:'\uD83D\uDCC5',name:'Last Played',desc:'Date the game was last launched',example:'Last: 2025-12-15',cat:'basic'},
@@ -284,7 +284,7 @@ function card(g,action){
   const b=[];
   if(g.installed_htpc)b.push('<span class="micro-badge mb-installed">Installed</span>');
   else if(!g.ever_played)b.push('<span class="micro-badge mb-not">Unplayed</span>');
-  else b.push('<span class="micro-badge mb-not">Not on HTPC</span>');
+  else b.push('<span class="micro-badge mb-not">Not installed</span>');
   if(g.nsfw_auto)b.push('<span class="micro-badge mb-nsfw">NSFW</span>');
   if(g.enriched)b.push('<span class="micro-badge mb-enriched">Enriched</span>');
   let pt=g.playtime_hours>0?g.playtime_hours+'h':'';

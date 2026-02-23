@@ -1,0 +1,20 @@
+# Data & runtime
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.db.bak.*
+logs/
+__pycache__/
+*.pyc
+
+# Environment
+.env
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store

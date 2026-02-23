@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Screensaver Customizer</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+:root{--bg:#0d1117;--surface:#161b22;--surface-hover:#1c2129;--border:#30363d;--text:#e6edf3;--text-dim:#8b949e;--text-faint:#484f58;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--orange:#d29922;--purple:#bc8cff}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;line-height:1.5;height:100vh;overflow:hidden}
+.header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface)}
+.header h1{font-size:1.1rem;font-weight:600;display:flex;align-items:center;gap:10px}
+.stats{display:flex;gap:16px;font-size:.82rem;color:var(--text-dim)}
+.stat-val{color:var(--text);font-weight:600}
+.header-actions{display:flex;gap:8px}
+.btn{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.78rem;font-weight:500;cursor:pointer;transition:all .15s}
+.btn:hover{background:var(--surface-hover);border-color:var(--text-faint)}
+.btn-accent{border-color:var(--accent);color:var(--accent)}
+.btn-accent:hover{background:rgba(88,166,255,.1)}
+/* Tabs */
+.tab-bar{display:flex;border-bottom:1px solid var(--border);background:var(--surface);padding:0 24px}
+.tab{padding:10px 20px;font-size:.85rem;font-weight:500;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab-content{display:none;height:calc(100vh - 110px)}
+.tab-content.active{display:flex}
+/* Games tab */
+.games-tab{display:flex;width:100%}
+.panel{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+.panel:first-child{border-right:1px solid var(--border)}
+.panel-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);background:rgba(22,27,34,.8);min-height:48px}
+.panel-title{font-size:.9rem;font-weight:600;display:flex;align-items:center;gap:8px}
+.panel-count{font-size:.72rem;color:var(--text-dim);background:rgba(255,255,255,.06);padding:2px 8px;border-radius:10px}
+.search-box{display:flex;align-items:center;gap:6px}
+.search-box input{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--text);font-size:.8rem;width:180px;outline:none}
+.search-box input:focus{border-color:var(--accent)}
+.filter-btn{padding:3px 8px;border-radius:4px;border:1px solid transparent;background:transparent;color:var(--text-dim);font-size:.72rem;cursor:pointer}
+.filter-btn.active{color:var(--accent);border-color:rgba(88,166,255,.3);background:rgba(88,166,255,.08)}
+.game-list-wrap{flex:1;display:flex;overflow:hidden}
+.game-list{flex:1;overflow-y:auto;padding:6px}
+.game-list::-webkit-scrollbar{width:6px}
+.game-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+/* Alpha scroll */
+.alpha-strip{width:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:4px 0;overflow:hidden;border-left:1px solid var(--border);background:rgba(13,17,23,.5)}
+.alpha-strip span{font-size:.58rem;color:var(--text-faint);cursor:pointer;padding:1px 4px;line-height:1.3;transition:color .1s}
+.alpha-strip span:hover{color:var(--accent)}
+.alpha-strip span.has-games{color:var(--text-dim)}
+.game-card{display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:6px;cursor:pointer;border:1px solid transparent;transition:background .1s}
+.game-card:hover{background:var(--surface-hover);border-color:var(--border)}
+.game-thumb{width:100px;height:38px;border-radius:3px;object-fit:cover;background:var(--surface);flex-shrink:0}
+.game-card-info{flex:1;min-width:0}
+.game-card-name{font-size:.82rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:1px}
+.game-card-meta{display:flex;align-items:center;gap:6px;font-size:.68rem;color:var(--text-dim);flex-wrap:wrap}
+.micro-badge{padding:1px 5px;border-radius:3px;font-size:.64rem;font-weight:500}
+.mb-installed{background:rgba(63,185,80,.15);color:var(--green)}
+.mb-not{background:rgba(255,255,255,.04);color:var(--text-faint)}
+.mb-nsfw{background:rgba(248,81,73,.15);color:var(--red)}
+.mb-enriched{background:rgba(88,166,255,.1);color:var(--accent)}
+.game-card-action{flex-shrink:0;width:28px;height:28px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text-dim);font-size:.9rem;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0}
+.game-card:hover .game-card-action{opacity:1}
+.game-card-action.add:hover{color:var(--green);border-color:var(--green)}
+.game-card-action.remove:hover{color:var(--red);border-color:var(--red)}
+.empty-state{display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-faint);font-size:.85rem}
+/* Display tab */
+.display-tab{flex-direction:column;padding:24px;overflow-y:auto;max-width:900px;margin:0 auto;width:100%}
+.section-title{font-size:.82rem;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin:20px 0 12px;display:flex;align-items:center;gap:8px}
+.section-title:first-child{margin-top:0}
+.de-card{display:flex;align-items:center;gap:16px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;transition:border-color .15s}
+.de-card:hover{border-color:var(--text-faint)}
+.de-card.disabled{opacity:.5}
+.de-icon{font-size:1.4rem;width:36px;text-align:center;flex-shrink:0}
+.de-info{flex:1;min-width:0}
+.de-name{font-size:.9rem;font-weight:600;margin-bottom:2px}
+.de-desc{font-size:.75rem;color:var(--text-dim);margin-bottom:4px}
+.de-example{font-size:.72rem;color:var(--text-faint);font-style:italic;padding:4px 8px;background:rgba(0,0,0,.3);border-radius:4px;display:inline-block}
+.de-badge{font-size:.65rem;padding:2px 6px;border-radius:3px;margin-left:8px}
+.de-badge-enriched{background:rgba(188,140,255,.15);color:var(--purple)}
+.de-controls{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.de-arrows{display:flex;flex-direction:column;gap:2px}
+.de-arrow{width:24px;height:18px;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--text-dim);font-size:.6rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.de-arrow:hover{color:var(--text);border-color:var(--text-faint);background:var(--surface-hover)}
+.toggle{position:relative;width:36px;height:20px;cursor:pointer;flex-shrink:0}
+.toggle input{display:none}
+.toggle-track{position:absolute;top:0;left:0;width:100%;height:100%;background:var(--border);border-radius:10px;transition:background .2s}
+.toggle input:checked+.toggle-track{background:var(--accent)}
+.toggle-thumb{position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s}
+.toggle input:checked~.toggle-thumb{transform:translateX(16px)}
+/* Settings tab */
+.settings-tab{flex-direction:column;padding:24px;overflow-y:auto;max-width:900px;margin:0 auto;width:100%}
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(48,54,61,.5)}
+.setting-label{font-size:.88rem}
+.setting-desc{font-size:.72rem;color:var(--text-dim);margin-top:2px}
+.setting-input{display:flex;align-items:center;gap:8px}
+.setting-input input[type=number]{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:.85rem;width:80px;text-align:center;outline:none}
+.setting-input input[type=number]:focus{border-color:var(--accent)}
+.setting-unit{font-size:.72rem;color:var(--text-faint)}
+.setting-input input[type=range]{width:140px;accent-color:var(--accent)}
+.range-val{font-size:.82rem;color:var(--text);min-width:32px;text-align:right}
+/* Enrichment */
+.enrich-panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin:12px 0}
+.enrich-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.enrich-status{font-size:.82rem;color:var(--text-dim)}
+.progress-bar{width:100%;height:8px;background:var(--bg);border-radius:4px;overflow:hidden;margin-bottom:8px}
+.progress-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .5s ease;width:0}
+.progress-fill.rate-limited{background:var(--orange)}
+.progress-fill.error{background:var(--red)}
+.progress-fill.complete{background:var(--green)}
+.enrich-details{display:flex;gap:20px;font-size:.75rem;color:var(--text-dim);flex-wrap:wrap}
+.enrich-detail span{color:var(--text);font-weight:500}
+/* Data section */
+.data-actions{display:flex;gap:10px;margin:12px 0;flex-wrap:wrap}
+.data-actions .btn{padding:8px 16px}
+input[type=file]{display:none}
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:8px;font-size:.85rem;z-index:200;transition:transform .3s ease,opacity .3s ease;opacity:0;pointer-events:none}
+.toast.visible{transform:translateX(-50%) translateY(0);opacity:1}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>&#127918; Screensaver Customizer</h1>
+  <div class="stats">
+    <span>Library: <span class="stat-val" id="stat-total">-</span></span>
+    <span>In Screensaver: <span class="stat-val" id="stat-included" style="color:var(--green)">-</span></span>
+    <span>Excluded: <span class="stat-val" id="stat-excluded" style="color:var(--red)">-</span></span>
+    <span>NSFW: <span class="stat-val" id="stat-nsfw" style="color:var(--orange)">-</span></span>
+    <span>Enriched: <span class="stat-val" id="stat-enriched" style="color:var(--purple)">-</span></span>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-accent" onclick="openScreensaver()">&#9654; Preview</button>
+  </div>
+</div>
+<div class="tab-bar">
+  <div class="tab active" onclick="switchTab('games')">&#127918; Games</div>
+  <div class="tab" onclick="switchTab('display')">&#127912; Display</div>
+  <div class="tab" onclick="switchTab('settings')">&#9881; Settings</div>
+</div>
+
+<!-- GAMES TAB -->
+<div class="tab-content active" id="tab-games">
+  <div class="games-tab">
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">&#9989; Included <span class="panel-count" id="inc-count">0</span></div>
+        <div class="search-box">
+          <input type="text" id="search-inc" placeholder="Search..." oninput="renderInc()">
+          <button class="filter-btn active" data-f="all" onclick="setF(this,'inc')">All</button>
+          <button class="filter-btn" data-f="installed" onclick="setF(this,'inc')">Installed</button>
+          <button class="filter-btn" data-f="played" onclick="setF(this,'inc')">Played</button>
+          <button class="filter-btn" data-f="unplayed" onclick="setF(this,'inc')">Unplayed</button>
+        </div>
+      </div>
+      <div class="game-list-wrap">
+        <div class="game-list" id="list-inc"></div>
+        <div class="alpha-strip" id="alpha-inc"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">&#128683; Excluded <span class="panel-count" id="exc-count">0</span></div>
+        <div class="search-box">
+          <input type="text" id="search-exc" placeholder="Search..." oninput="renderExc()">
+          <button class="filter-btn active" data-f="all" onclick="setF(this,'exc')">All</button>
+          <button class="filter-btn" data-f="nsfw" onclick="setF(this,'exc')">NSFW</button>
+          <button class="filter-btn" data-f="manual" onclick="setF(this,'exc')">Manual</button>
+        </div>
+      </div>
+      <div class="game-list-wrap">
+        <div class="game-list" id="list-exc"></div>
+        <div class="alpha-strip" id="alpha-exc"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- DISPLAY TAB -->
+<div class="tab-content" id="tab-display">
+  <div class="display-tab" id="display-list"></div>
+</div>
+
+<!-- SETTINGS TAB -->
+<div class="tab-content" id="tab-settings">
+  <div class="settings-tab">
+    <div class="section-title">&#9201; Timing</div>
+    <div class="setting-row"><div><div class="setting-label">Idle activation</div><div class="setting-desc">Mute + screensaver after this idle time</div></div><div class="setting-input"><input type="number" id="s-idle" min="30" max="600" step="10"><span class="setting-unit">sec</span></div></div>
+    <div class="setting-row"><div><div class="setting-label">Slide duration</div><div class="setting-desc">How long each game hero is shown</div></div><div class="setting-input"><input type="number" id="s-slide" min="5" max="60" step="1"><span class="setting-unit">sec</span></div></div>
+    <div class="setting-row"><div><div class="setting-label">Transition speed</div><div class="setting-desc">Crossfade between slides</div></div><div class="setting-input"><input type="number" id="s-trans" min="0.5" max="5" step="0.5"><span class="setting-unit">sec</span></div></div>
+    <div class="setting-row"><div><div class="setting-label">Title delay</div><div class="setting-desc">Delay before game info fades in</div></div><div class="setting-input"><input type="number" id="s-title" min="0" max="10" step="0.5"><span class="setting-unit">sec</span></div></div>
+    <div class="section-title">&#127916; Animation</div>
+    <div class="setting-row"><div><div class="setting-label">Ken Burns intensity</div><div class="setting-desc">Pan/zoom amount (0 = static, 1 = full)</div></div><div class="setting-input"><input type="range" id="s-kb" min="0" max="1" step="0.05" oninput="document.getElementById('kb-val').textContent=parseFloat(this.value).toFixed(2)"><span class="range-val" id="kb-val">0.70</span></div></div>
+    <div style="margin-top:16px"><button class="btn btn-accent" onclick="saveSettings()">Save Settings</button></div>
+
+    <div class="section-title" style="margin-top:32px">&#128640; Steam Enrichment</div>
+    <div class="enrich-panel">
+      <div class="enrich-header">
+        <div><strong>Enrich game data from Steam Store</strong><div class="setting-desc">Fetches genres, developer, Metacritic score, controller/VR support, etc. Takes ~25min for a full library due to rate limits.</div></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-accent" id="enrich-start-btn" onclick="startEnrichment()">&#128640; Start Enrichment</button>
+          <button class="btn" id="enrich-stop-btn" onclick="stopEnrichment()" style="display:none">&#9632; Stop</button>
+        </div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="enrich-progress"></div></div>
+      <div id="enrich-msg" class="enrich-status"></div>
+      <div class="enrich-details" id="enrich-details" style="display:none">
+        <div>Progress: <span id="ed-count">0/0</span></div>
+        <div>Current: <span id="ed-current">-</span></div>
+        <div>ETA: <span id="ed-eta">-</span></div>
+        <div>Errors: <span id="ed-errors">0</span></div>
+        <div>Skipped (cached): <span id="ed-skipped">0</span></div>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-top:32px">&#128190; Data Management</div>
+    <div class="data-actions">
+      <button class="btn" onclick="exportSettings()">&#11015; Export Settings</button>
+      <button class="btn" onclick="document.getElementById('import-file').click()">&#11014; Import Settings</button>
+      <input type="file" id="import-file" accept=".json" onchange="importSettings(event)">
+      <button class="btn" onclick="exportGameData()">&#11015; Export Game Data</button>
+      <button class="btn" onclick="refreshLibrary()">&#8635; Refresh Steam Library</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script>
+(function(){
+'use strict';
+let ALL=[],exclSet=new Set(),CONFIG={},incF='all',excF='all',saveTO=null,enrichPoll=null;
+
+const ALPHA='#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+
+const ELEMENTS=[
+  {id:'installed_badge',icon:'\u2705',name:'Install Status',desc:'Shows whether the game is installed on HTPC',example:'\u2713 Installed / Not on HTPC / Never installed',cat:'basic'},
+  {id:'playtime',icon:'\u23F1',name:'Playtime',desc:'Total hours played across all platforms',example:'142.3h played',cat:'basic'},
+  {id:'device_breakdown',icon:'\uD83D\uDCBB',name:'Device Breakdown',desc:'Hours split by PC, Steam Deck, Linux, Mac',example:'PC 98h \u00b7 Deck 44h',cat:'basic'},
+  {id:'last_played',icon:'\uD83D\uDCC5',name:'Last Played',desc:'Date the game was last launched',example:'Last: 2025-12-15',cat:'basic'},
+  {id:'genres',icon:'\uD83C\uDFAD',name:'Genre Tags',desc:'Up to 3 genre tags from Steam store page',example:'Action \u00b7 RPG \u00b7 Open World',cat:'enriched'},
+  {id:'developer',icon:'\uD83D\uDEE0',name:'Developer',desc:'Game developer/studio name',example:'CD Projekt Red',cat:'enriched'},
+  {id:'metacritic',icon:'\u2B50',name:'Metacritic Score',desc:'Metacritic review score when available',example:'\u2605 94',cat:'enriched'},
+  {id:'release_date',icon:'\uD83D\uDCC6',name:'Release Date',desc:'Original release date from Steam',example:'Dec 10, 2020',cat:'enriched'},
+  {id:'description',icon:'\uD83D\uDCDD',name:'Short Description',desc:'One-liner blurb from the store page (shows below main info)',example:'An open-world action adventure...',cat:'enriched'},
+  {id:'controller',icon:'\uD83C\uDFAE',name:'Controller Support',desc:'Full or partial controller support indicator',example:'\uD83C\uDFAE Full Controller',cat:'enriched'},
+  {id:'vr_support',icon:'\uD83E\uDD7D',name:'VR Support',desc:'Shows VR badge when game supports VR headsets',example:'\uD83E\uDD7D VR Supported',cat:'enriched'},
+  {id:'platforms',icon:'\uD83D\uDDA5',name:'Native Platforms',desc:'Which platforms the game runs on natively',example:'Win / Linux / Mac',cat:'enriched'}
+];
+
+async function init(){
+  try{
+    const[gr,er,cr]=await Promise.all([fetch('/api/games'),fetch('/api/excluded'),fetch('/api/config')]);
+    ALL=await gr.json(); const ed=await er.json(); CONFIG=await cr.json();
+    exclSet=new Set(ed.excluded||[]);
+    render(); loadSettings(); renderDisplay(); pollEnrichment();
+  }catch(e){console.error(e)}
+}
+
+function render(){renderInc();renderExc();updateStats()}
+
+// === GAMES TAB ===
+window.renderInc=function(){
+  const s=document.getElementById('search-inc').value.toLowerCase();
+  let g=ALL.filter(x=>!exclSet.has(x.appid)&&!x.nsfw_auto);
+  if(incF==='installed')g=g.filter(x=>x.installed_htpc);
+  else if(incF==='played')g=g.filter(x=>x.ever_played);
+  else if(incF==='unplayed')g=g.filter(x=>!x.ever_played);
+  if(s)g=g.filter(x=>x.name.toLowerCase().includes(s));
+  document.getElementById('inc-count').textContent=g.length;
+  document.getElementById('list-inc').innerHTML=g.length?g.map(x=>card(x,'remove')).join(''):'<div class="empty-state">No games match</div>';
+  buildAlpha('inc',g);
+};
+
+window.renderExc=function(){
+  const s=document.getElementById('search-exc').value.toLowerCase();
+  let g=ALL.filter(x=>exclSet.has(x.appid)||x.nsfw_auto);
+  if(excF==='nsfw')g=g.filter(x=>x.nsfw_auto);
+  else if(excF==='manual')g=g.filter(x=>exclSet.has(x.appid)&&!x.nsfw_auto);
+  if(s)g=g.filter(x=>x.name.toLowerCase().includes(s));
+  document.getElementById('exc-count').textContent=g.length;
+  document.getElementById('list-exc').innerHTML=g.length?g.map(x=>card(x,'add')).join(''):'<div class="empty-state">No excluded games</div>';
+  buildAlpha('exc',g);
+};
+
+function card(g,action){
+  const b=[];
+  if(g.installed_htpc)b.push('<span class="micro-badge mb-installed">Installed</span>');
+  else if(!g.ever_played)b.push('<span class="micro-badge mb-not">Unplayed</span>');
+  else b.push('<span class="micro-badge mb-not">Not on HTPC</span>');
+  if(g.nsfw_auto)b.push('<span class="micro-badge mb-nsfw">NSFW</span>');
+  if(g.enriched)b.push('<span class="micro-badge mb-enriched">Enriched</span>');
+  let pt=g.playtime_hours>0?g.playtime_hours+'h':'';
+  const last=g.last_played?'Last: '+g.last_played:'';
+  const ic=action==='add'?'&#8592;':'&#8594;';
+  const fl=g.name.charAt(0).toUpperCase();
+  return '<div class="game-card" data-fl="'+fl+'" onclick="tog('+g.appid+',\''+action+'\')"><img class="game-thumb" src="'+g.header+'" loading="lazy" onerror="this.style.background=\'var(--border)\';this.removeAttribute(\'src\')"><div class="game-card-info"><div class="game-card-name">'+esc(g.name)+'</div><div class="game-card-meta">'+b.join('')+(pt?'<span>'+pt+'</span>':'')+(last?'<span>'+last+'</span>':'')+'</div></div><button class="game-card-action '+action+'" onclick="event.stopPropagation();tog('+g.appid+',\''+action+'\')" title="'+(action==='add'?'Include':'Exclude')+'">'+ic+'</button></div>';
+}
+
+function buildAlpha(panel,games){
+  const strip=document.getElementById('alpha-'+panel);
+  const list=document.getElementById('list-'+panel);
+  const letters=new Set(games.map(g=>{const c=g.name.charAt(0).toUpperCase();return /[A-Z]/.test(c)?c:'#'}));
+  strip.innerHTML=ALPHA.map(l=>'<span class="'+(letters.has(l)?'has-games':'')+'" onclick="alphaJump(\''+panel+'\',\''+l+'\')" title="'+l+'">'+l+'</span>').join('');
+}
+
+window.alphaJump=function(panel,letter){
+  const list=document.getElementById('list-'+panel);
+  const cards=list.querySelectorAll('.game-card');
+  for(const c of cards){
+    const fl=c.dataset.fl;
+    const match=letter==='#'?!/[A-Z]/i.test(fl):fl===letter;
+    if(match){c.scrollIntoView({behavior:'smooth',block:'start'});return}
+  }
+};
+
+function esc(s){const e=document.createElement('span');e.textContent=s;return e.innerHTML}
+
+function updateStats(){
+  const exc=ALL.filter(g=>exclSet.has(g.appid)||g.nsfw_auto);
+  const inc=ALL.filter(g=>!exclSet.has(g.appid)&&!g.nsfw_auto);
+  const nsfw=ALL.filter(g=>g.nsfw_auto);
+  const enriched=ALL.filter(g=>g.enriched);
+  document.getElementById('stat-total').textContent=ALL.length;
+  document.getElementById('stat-included').textContent=inc.length;
+  document.getElementById('stat-excluded').textContent=exc.length;
+  document.getElementById('stat-nsfw').textContent=nsfw.length;
+  document.getElementById('stat-enriched').textContent=enriched.length+'/'+ALL.length;
+}
+
+window.tog=function(id,action){if(action==='remove')exclSet.add(id);else exclSet.delete(id);render();debSave()};
+window.setF=function(btn,panel){btn.parentElement.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');if(panel==='inc'){incF=btn.dataset.f;renderInc()}else{excF=btn.dataset.f;renderExc()}};
+function debSave(){if(saveTO)clearTimeout(saveTO);saveTO=setTimeout(save,500)}
+async function save(){try{const r=await fetch('/api/excluded',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({excluded:Array.from(exclSet)})});if(r.ok)toast('Saved \u2014 '+exclSet.size+' excluded')}catch(e){toast('Save failed')}}
+
+// === TABS ===
+window.switchTab=function(t){
+  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',['games','display','settings'][i]===t));
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-'+t).classList.add('active');
+};
+
+// === DISPLAY TAB ===
+function renderDisplay(){
+  const list=document.getElementById('display-list');
+  const elCfg=CONFIG.display_elements||[];
+  const cfgMap=Object.fromEntries(elCfg.map(e=>[e.id,e]));
+  // Merge definitions with config
+  const merged=ELEMENTS.map(def=>{
+    const cfg=cfgMap[def.id]||{enabled:true,order:999};
+    return {...def,enabled:cfg.enabled,order:cfg.order};
+  }).sort((a,b)=>a.order-b.order);
+
+  const basic=merged.filter(e=>e.cat==='basic');
+  const enriched=merged.filter(e=>e.cat==='enriched');
+
+  let html='<div class="section-title">&#128218; Basic Info (from Steam library)</div>';
+  html+=basic.map((e,i)=>deCard(e,i,'basic')).join('');
+  html+='<div class="section-title">&#128640; Enriched Data <span class="de-badge de-badge-enriched">requires Steam enrichment</span></div>';
+  html+=enriched.map((e,i)=>deCard(e,i+basic.length,'enriched')).join('');
+  list.innerHTML=html;
+}
+
+function deCard(e,idx,cat){
+  const disClass=e.enabled?'':'disabled';
+  return '<div class="de-card '+disClass+'" id="de-'+e.id+'"><div class="de-icon">'+e.icon+'</div><div class="de-info"><div class="de-name">'+e.name+(e.cat==='enriched'?' <span class="de-badge de-badge-enriched">enriched</span>':'')+'</div><div class="de-desc">'+e.desc+'</div><div class="de-example">'+e.example+'</div></div><div class="de-controls"><div class="de-arrows"><button class="de-arrow" onclick="moveDE(\''+e.id+'\',-1)" title="Move up">&#9650;</button><button class="de-arrow" onclick="moveDE(\''+e.id+'\',1)" title="Move down">&#9660;</button></div><label class="toggle"><input type="checkbox" '+(e.enabled?'checked':'')+' onchange="toggleDE(\''+e.id+'\',this.checked)"><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div></div>';
+}
+
+window.toggleDE=function(id,enabled){
+  const els=CONFIG.display_elements||[];
+  const el=els.find(e=>e.id===id);
+  if(el)el.enabled=enabled;
+  else els.push({id,enabled,order:els.length});
+  CONFIG.display_elements=els;
+  saveConfig({display_elements:els});
+  renderDisplay();
+};
+
+window.moveDE=function(id,dir){
+  const els=(CONFIG.display_elements||[]).sort((a,b)=>a.order-b.order);
+  const idx=els.findIndex(e=>e.id===id);
+  if(idx<0)return;
+  const swapIdx=idx+dir;
+  if(swapIdx<0||swapIdx>=els.length)return;
+  const tmpO=els[idx].order;
+  els[idx].order=els[swapIdx].order;
+  els[swapIdx].order=tmpO;
+  CONFIG.display_elements=els;
+  saveConfig({display_elements:els});
+  renderDisplay();
+};
+
+async function saveConfig(updates){
+  try{await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(updates)});toast('Settings saved')}catch(e){toast('Save failed')}
+}
+
+// === SETTINGS TAB ===
+function loadSettings(){
+  document.getElementById('s-idle').value=CONFIG.screensaver_after_seconds||120;
+  document.getElementById('s-slide').value=CONFIG.screensaver_slide_duration_seconds||12;
+  document.getElementById('s-trans').value=CONFIG.screensaver_transition_seconds||2.5;
+  document.getElementById('s-title').value=CONFIG.screensaver_title_delay_seconds||3;
+  document.getElementById('s-kb').value=CONFIG.ken_burns_intensity||0.7;
+  document.getElementById('kb-val').textContent=(CONFIG.ken_burns_intensity||0.7).toFixed(2);
+}
+
+window.saveSettings=async function(){
+  const u={
+    mute_after_seconds:parseInt(document.getElementById('s-idle').value),
+    screensaver_after_seconds:parseInt(document.getElementById('s-idle').value),
+    screensaver_slide_duration_seconds:parseInt(document.getElementById('s-slide').value),
+    screensaver_transition_seconds:parseFloat(document.getElementById('s-trans').value),
+    screensaver_title_delay_seconds:parseFloat(document.getElementById('s-title').value),
+    ken_burns_intensity:parseFloat(document.getElementById('s-kb').value)
+  };
+  Object.assign(CONFIG,u);
+  await saveConfig(u);
+};
+
+// === ENRICHMENT ===
+window.startEnrichment=async function(){
+  try{const r=await fetch('/api/enrichment/start',{method:'POST'});const d=await r.json();if(d.ok){toast('Enrichment started');startEnrichPoll()}else toast(d.error||'Failed')}catch(e){toast('Failed')}
+};
+window.stopEnrichment=async function(){
+  try{await fetch('/api/enrichment/stop',{method:'POST'});toast('Stopping...')}catch(e){}
+};
+
+function startEnrichPoll(){if(enrichPoll)return;enrichPoll=setInterval(pollEnrichment,2000)}
+function stopEnrichPoll(){if(enrichPoll){clearInterval(enrichPoll);enrichPoll=null}}
+
+async function pollEnrichment(){
+  try{
+    const r=await fetch('/api/enrichment/status');const s=await r.json();
+    const bar=document.getElementById('enrich-progress');
+    const msg=document.getElementById('enrich-msg');
+    const det=document.getElementById('enrich-details');
+    const startBtn=document.getElementById('enrich-start-btn');
+    const stopBtn=document.getElementById('enrich-stop-btn');
+    if(s.running||s.phase==='running'||s.phase==='rate_limited'||s.phase==='starting'){
+      startBtn.style.display='none'; stopBtn.style.display='';
+      det.style.display='flex';
+      const pct=s.total>0?((s.completed/s.total)*100):0;
+      bar.style.width=pct+'%';
+      bar.className='progress-fill'+(s.phase==='rate_limited'?' rate-limited':'');
+      document.getElementById('ed-count').textContent=s.completed+'/'+s.total;
+      document.getElementById('ed-current').textContent=s.current_game||'-';
+      document.getElementById('ed-eta').textContent=s.eta_seconds>0?formatTime(s.eta_seconds):'-';
+      document.getElementById('ed-errors').textContent=s.errors;
+      document.getElementById('ed-skipped').textContent=s.skipped;
+      startEnrichPoll();
+    } else {
+      startBtn.style.display=''; stopBtn.style.display='none';
+      if(s.phase==='complete'){
+        bar.style.width='100%'; bar.className='progress-fill complete';
+        det.style.display='flex'; stopEnrichPoll();
+        // Reload games to get enriched data
+        const gr=await fetch('/api/games'); ALL=await gr.json(); render(); updateStats();
+      } else if(s.phase==='error'||s.phase==='stopped'){
+        bar.className='progress-fill'+(s.phase==='error'?' error':'');
+        stopEnrichPoll();
+      } else { stopEnrichPoll(); }
+    }
+    msg.textContent=s.message||'';
+  }catch(e){}
+}
+
+function formatTime(s){const m=Math.floor(s/60);const sec=s%60;return m>0?m+'m '+sec+'s':sec+'s'}
+
+// === DATA MANAGEMENT ===
+window.exportSettings=function(){
+  const data={config:CONFIG,excluded:Array.from(exclSet),exported_at:new Date().toISOString(),version:'2.0'};
+  dl('screensaver-settings.json',JSON.stringify(data,null,2));
+};
+window.importSettings=async function(e){
+  const file=e.target.files[0]; if(!file)return;
+  try{
+    const text=await file.text(); const data=JSON.parse(text);
+    if(data.config){Object.assign(CONFIG,data.config);await saveConfig(data.config);loadSettings();renderDisplay()}
+    if(data.excluded){exclSet=new Set(data.excluded);await fetch('/api/excluded',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({excluded:data.excluded})});render()}
+    toast('Settings imported');
+  }catch(err){toast('Import failed: '+err.message)}
+  e.target.value='';
+};
+window.exportGameData=function(){
+  dl('screensaver-games.json',JSON.stringify(ALL,null,2));
+};
+window.refreshLibrary=async function(){
+  toast('Refreshing from Steam...');
+  try{const r=await fetch('/api/refresh-library',{method:'POST'});const d=await r.json();if(d.ok){toast('Refreshed \u2014 '+d.count+' games');const gr=await fetch('/api/games');ALL=await gr.json();render()}else toast('Failed')}catch(e){toast('Refresh failed')}
+};
+function dl(name,content){const b=new Blob([content],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u)}
+
+window.openScreensaver=function(){window.open('/screensaver','_blank')};
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('visible');setTimeout(()=>t.classList.remove('visible'),2500)}
+
+init();
+})();
+</script>
+</body>
+</html>

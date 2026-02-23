@@ -1,4 +1,5 @@
 @echo off
+setlocal EnableDelayedExpansion
 title PSS Installer
 echo.
 echo  ====================================
@@ -30,11 +31,11 @@ if errorlevel 1 (
 )
 echo  [OK] Dependencies installed.
 
-:: Check for .env
+:: Check for existing .env
 if exist "%~dp0.env" (
     echo.
-    echo  [OK] .env already exists - skipping API key setup.
-    goto :check_steam
+    echo  [OK] .env already exists - skipping setup.
+    goto :done
 )
 
 :: Prompt for Steam API key
@@ -44,43 +45,40 @@ echo   You need a Steam Web API Key to use PSS.
 echo   Get one here: https://steamcommunity.com/dev/apikey
 echo  -----------------------------------------------
 echo.
-set /p STEAM_KEY="  Enter your Steam API Key: "
-if "%STEAM_KEY%"=="" (
-    echo  [ERROR] No key entered. You can create .env manually later.
+set /p "STEAM_KEY=  Enter your Steam API Key: "
+if "!STEAM_KEY!"=="" (
+    echo  [ERROR] No key entered. Create .env manually later.
     echo  See .env.example for the format.
     pause
     exit /b 1
 )
 
 :: Detect Steam path
-:check_steam
-set "STEAM_DEFAULT=C:\Program Files (x86)\Steam"
-if exist "%STEAM_DEFAULT%\steam.exe" (
-    set "STEAM_DIR=%STEAM_DEFAULT%"
-    echo  [OK] Steam found at %STEAM_DEFAULT%
+set "STEAM_DIR=C:\Program Files ^(x86^)\Steam"
+set "STEAM_CHECK=C:\Program Files (x86)\Steam\steam.exe"
+if exist "!STEAM_CHECK!" (
+    echo  [OK] Steam found at default location.
 ) else (
     echo.
-    set /p STEAM_DIR="  Steam install path (or press Enter for default): "
-    if "%STEAM_DIR%"=="" set "STEAM_DIR=%STEAM_DEFAULT%"
+    set /p "STEAM_DIR=  Steam install path: "
 )
 
-:: Write .env (only if it doesn't exist)
-if not exist "%~dp0.env" (
-    echo STEAM_API_KEY=%STEAM_KEY%> "%~dp0.env"
-    echo STEAM_PATH=%STEAM_DIR%>> "%~dp0.env"
-    echo  [OK] Configuration saved to .env
-)
+:: Write .env
+echo STEAM_API_KEY=!STEAM_KEY!> "%~dp0.env"
+echo STEAM_PATH=!STEAM_DIR!>> "%~dp0.env"
+echo  [OK] Configuration saved to .env
 
-:: Create data/logs dirs
+:: Create dirs
 if not exist "%~dp0data" mkdir "%~dp0data"
 if not exist "%~dp0logs" mkdir "%~dp0logs"
 
+:done
 echo.
 echo  ====================================
 echo   Setup complete!
 echo.
 echo   To start PSS, double-click START.bat
-echo   or run: python -m pss.server
 echo  ====================================
 echo.
 pause
+endlocal

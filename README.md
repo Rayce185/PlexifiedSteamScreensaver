@@ -21,7 +21,7 @@ A cinematic Ken Burns slideshow screensaver for your Steam game library, with a 
 ### 1. Clone and install dependencies
 
 ```bash
-git clone https://github.com/YOUR_USER/PSS.git
+git clone https://github.com/Rayce185/PlexifiedSteamScreensaver.git
 cd PSS
 pip install -r requirements.txt
 ```

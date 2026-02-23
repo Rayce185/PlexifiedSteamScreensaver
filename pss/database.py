@@ -72,7 +72,6 @@ def init_db(db_path):
         db.execute("INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)",
                     ("schema_version", str(SCHEMA_VERSION)))
 
-@contextmanager
 DEFAULT_DISPLAY_ELEMENTS = [
     {"id": "installed_badge", "enabled": True, "order": 0},
     {"id": "playtime", "enabled": True, "order": 1},
@@ -88,6 +87,7 @@ DEFAULT_DISPLAY_ELEMENTS = [
     {"id": "platforms", "enabled": True, "order": 11},
 ]
 
+@contextmanager
 def get_db():
     if DB_PATH is None:
         raise RuntimeError("Database not initialized -- call init_db() first")

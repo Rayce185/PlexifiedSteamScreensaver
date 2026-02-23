@@ -1,26 +1,89 @@
 @echo off
+setlocal EnableDelayedExpansion
 title PSS - Plexified Steam Screensaver
 cd /d "%~dp0"
 
-:: Quick sanity checks
+:: Setup logging
+set "LOGFILE=%~dp0start.log"
+echo PSS START LOG > "!LOGFILE!"
+echo Started: %date% %time% >> "!LOGFILE!"
+echo Machine: %COMPUTERNAME% >> "!LOGFILE!"
+echo WorkDir: %~dp0 >> "!LOGFILE!"
+echo. >> "!LOGFILE!"
+
+:: Check .env
 if not exist ".env" (
-    echo  .env not found - run INSTALL.bat first!
+    call :log "[ERROR] .env not found - run INSTALL.bat first!"
     pause
     exit /b 1
 )
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo  Python not found - run INSTALL.bat first!
+call :log "[OK] .env found"
+
+:: Check Python
+python --version > "%TEMP%\pss_pyver.txt" 2>&1
+set PYERR=!errorlevel!
+set /p PYVER=< "%TEMP%\pss_pyver.txt"
+del "%TEMP%\pss_pyver.txt" 2>nul
+if !PYERR! neq 0 (
+    call :log "[ERROR] Python not found - run INSTALL.bat first!"
     pause
     exit /b 1
+)
+call :log "[OK] %PYVER%"
+
+:: Check if fastapi is importable
+python -c "import fastapi; print(f'fastapi {fastapi.__version__}')" > "%TEMP%\pss_fa.txt" 2>&1
+set FAERR=!errorlevel!
+set /p FAVER=< "%TEMP%\pss_fa.txt"
+del "%TEMP%\pss_fa.txt" 2>nul
+if !FAERR! neq 0 (
+    call :log "[ERROR] FastAPI not installed - run INSTALL.bat first!"
+    pause
+    exit /b 1
+)
+call :log "[OK] %FAVER%"
+
+:: Log .env contents (redacted)
+call :log ""
+call :log "Config:"
+for /f "usebackq tokens=1,2 delims==" %%a in (".env") do (
+    if /i "%%a"=="STEAM_API_KEY" (
+        echo   %%a=****redacted**** >> "!LOGFILE!"
+    ) else (
+        echo   %%a=%%b >> "!LOGFILE!"
+    )
 )
 
-:: Open browser after a short delay (in background)
+:: Check database
+if exist "data\pss.db" (
+    call :log "[OK] Database exists"
+) else (
+    call :log "[INFO] No database yet - first run will create it"
+)
+
+:: Open browser after delay
+call :log ""
+call :log "Launching browser in 3 seconds..."
 start "" cmd /c "timeout /t 3 /nobreak >nul && start http://localhost:8787/customizer"
 
-:: Launch server (stays in foreground so user can see logs + Ctrl+C to stop)
-echo  Starting PSS server...
-echo  Press Ctrl+C to stop.
-echo.
+:: Launch server (output goes to console + logs\pss_server.log)
+call :log "Starting PSS server..."
+call :log "(server logs also saved to logs\pss_server.log)"
+call :log ""
+
 python -m pss.server
+
+:: If we get here, server exited
+echo. >> "!LOGFILE!"
+echo Server exited: %date% %time% >> "!LOGFILE!"
+echo Exit code: !errorlevel! >> "!LOGFILE!"
+call :log ""
+call :log "Server stopped."
 pause
+endlocal
+exit /b 0
+
+:log
+echo  %~1
+echo  %~1 >> "!LOGFILE!"
+goto :eof

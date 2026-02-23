@@ -1,84 +1,126 @@
 @echo off
 setlocal EnableDelayedExpansion
 title PSS Installer
-echo.
-echo  ====================================
-echo   PSS - Plexified Steam Screensaver
-echo   First-Time Setup
-echo  ====================================
-echo.
+
+:: Setup logging - everything gets tee'd to install.log
+set "LOGFILE=%~dp0install.log"
+echo PSS INSTALL LOG > "!LOGFILE!"
+echo Started: %date% %time% >> "!LOGFILE!"
+echo Machine: %COMPUTERNAME% >> "!LOGFILE!"
+echo User: %USERNAME% >> "!LOGFILE!"
+echo WorkDir: %~dp0 >> "!LOGFILE!"
+echo. >> "!LOGFILE!"
+
+call :log "===================================="
+call :log " PSS - Plexified Steam Screensaver"
+call :log " First-Time Setup"
+call :log "===================================="
+call :log ""
 
 :: Check Python
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo  [ERROR] Python is not installed or not in PATH.
-    echo  Download it from https://www.python.org/downloads/
-    echo  Make sure to check "Add Python to PATH" during install.
-    echo.
+python --version > "%TEMP%\pss_pyver.txt" 2>&1
+set PYERR=!errorlevel!
+set /p PYVER=< "%TEMP%\pss_pyver.txt"
+del "%TEMP%\pss_pyver.txt" 2>nul
+if !PYERR! neq 0 (
+    call :log "[ERROR] Python is not installed or not in PATH."
+    call :log "Download it from https://www.python.org/downloads/"
+    call :log "Make sure to check 'Add Python to PATH' during install."
     pause
     exit /b 1
 )
-echo  [OK] Python found.
+call :log "[OK] %PYVER%"
+
+:: Check pip
+pip --version > "%TEMP%\pss_pipver.txt" 2>&1
+set PIPERR=!errorlevel!
+set /p PIPVER=< "%TEMP%\pss_pipver.txt"
+del "%TEMP%\pss_pipver.txt" 2>nul
+if !PIPERR! neq 0 (
+    call :log "[ERROR] pip not found."
+    pause
+    exit /b 1
+)
+call :log "[OK] %PIPVER%"
 
 :: Install dependencies
-echo.
-echo  Installing dependencies...
-pip install -r "%~dp0requirements.txt" --quiet
+call :log ""
+call :log "Installing dependencies..."
+pip install -r "%~dp0requirements.txt" >> "!LOGFILE!" 2>&1
 if errorlevel 1 (
-    echo  [ERROR] Failed to install dependencies.
+    call :log "[ERROR] Failed to install dependencies. Check install.log for details."
     pause
     exit /b 1
 )
-echo  [OK] Dependencies installed.
+call :log "[OK] Dependencies installed."
 
 :: Check for existing .env
 if exist "%~dp0.env" (
-    echo.
-    echo  [OK] .env already exists - skipping setup.
+    call :log ""
+    call :log "[OK] .env already exists - skipping setup."
     goto :done
 )
 
 :: Prompt for Steam API key
-echo.
-echo  -----------------------------------------------
-echo   You need a Steam Web API Key to use PSS.
-echo   Get one here: https://steamcommunity.com/dev/apikey
-echo  -----------------------------------------------
-echo.
+call :log ""
+call :log "-----------------------------------------------"
+call :log " You need a Steam Web API Key to use PSS."
+call :log " Get one here: https://steamcommunity.com/dev/apikey"
+call :log "-----------------------------------------------"
+call :log ""
 set /p "STEAM_KEY=  Enter your Steam API Key: "
+echo   API Key entered: [%STEAM_KEY:~0,4%...redacted] >> "!LOGFILE!"
 if "!STEAM_KEY!"=="" (
-    echo  [ERROR] No key entered. Create .env manually later.
-    echo  See .env.example for the format.
+    call :log "[ERROR] No key entered. Create .env manually later."
     pause
     exit /b 1
 )
 
 :: Detect Steam path
-set "STEAM_DIR=C:\Program Files ^(x86^)\Steam"
 set "STEAM_CHECK=C:\Program Files (x86)\Steam\steam.exe"
 if exist "!STEAM_CHECK!" (
-    echo  [OK] Steam found at default location.
+    set "STEAM_DIR=C:\Program Files (x86)\Steam"
+    call :log "[OK] Steam found at default location."
 ) else (
-    echo.
-    set /p "STEAM_DIR=  Steam install path: "
+    call :log "[WARN] Steam not found at default location."
+    set /p "STEAM_DIR=  Enter Steam install path: "
 )
+echo   Steam path: !STEAM_DIR! >> "!LOGFILE!"
 
 :: Write .env
-echo STEAM_API_KEY=!STEAM_KEY!> "%~dp0.env"
-echo STEAM_PATH=!STEAM_DIR!>> "%~dp0.env"
-echo  [OK] Configuration saved to .env
+> "%~dp0.env" echo STEAM_API_KEY=!STEAM_KEY!
+>> "%~dp0.env" echo STEAM_PATH=!STEAM_DIR!
+
+:: Verify .env was written
+if exist "%~dp0.env" (
+    call :log "[OK] Configuration saved to .env"
+) else (
+    call :log "[ERROR] Failed to write .env file!"
+    pause
+    exit /b 1
+)
 
 :: Create dirs
 if not exist "%~dp0data" mkdir "%~dp0data"
 if not exist "%~dp0logs" mkdir "%~dp0logs"
 
 :done
-echo.
-echo  ====================================
-echo   Setup complete!
-echo.
-echo   To start PSS, double-click START.bat
-echo  ====================================
-echo.
+call :log ""
+call :log "===================================="
+call :log " Setup complete!"
+call :log ""
+call :log " To start PSS, double-click START.bat"
+call :log "===================================="
+echo. >> "!LOGFILE!"
+echo Finished: %date% %time% >> "!LOGFILE!"
+echo Exit code: 0 >> "!LOGFILE!"
+call :log ""
 pause
 endlocal
+exit /b 0
+
+:: --- Logging subroutine: prints to screen AND appends to log ---
+:log
+echo  %~1
+echo  %~1 >> "!LOGFILE!"
+goto :eof

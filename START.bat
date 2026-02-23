@@ -63,17 +63,25 @@ if exist "data\pss.db" (
 
 :: Open browser after delay
 call :logblank
-call :log "Launching browser in 3 seconds..."
+call :log "Opening browser..."
 start "" cmd /c "timeout /t 3 /nobreak >nul && start http://localhost:8787/customizer"
 
 :: Launch server
-call :log "Starting PSS server..."
-call :log "(server logs also saved to logs\pss_server.log)"
+call :logblank
+call :log "===================================="
+call :log " PSS is running!"
+call :logblank
+call :log " Customizer: http://localhost:8787/customizer"
+call :log " Screensaver: http://localhost:8787/screensaver"
+call :logblank
+call :log " Keep this window open while using PSS."
+call :log " Close this window or press Ctrl+C to stop."
+call :log "===================================="
 call :logblank
 
 python -m pss.server
 
-:: If we get here, server exited
+:: Server exited
 echo.>> "!LOGFILE!"
 echo Server exited: %date% %time% >> "!LOGFILE!"
 echo Exit code: !errorlevel! >> "!LOGFILE!"

@@ -54,7 +54,7 @@ if errorlevel 1 (
 )
 call :log "[OK] Dependencies installed."
 
-:: Check for existing .env
+:: Check for existing .env — skip to done
 if exist "%~dp0.env" (
     call :logblank
     call :log "[OK] .env already exists - skipping setup."
@@ -76,29 +76,20 @@ if "!STEAM_KEY!"=="" (
     exit /b 1
 )
 
-:: Detect Steam path
-set "STEAM_CHECK=C:\Program Files (x86)\Steam\steam.exe"
-if exist "!STEAM_CHECK!" (
-    set "STEAM_DIR=C:\Program Files (x86)\Steam"
-    call :log "[OK] Steam found at default location."
-) else (
-    call :log "[WARN] Steam not found at default location."
-    set /p "STEAM_DIR=  Enter Steam install path: "
-)
+:: Detect Steam path — avoid parentheses in if blocks entirely
+call :detect_steam
 echo   Steam path: !STEAM_DIR! >> "!LOGFILE!"
 
 :: Write .env
 > "%~dp0.env" echo STEAM_API_KEY=!STEAM_KEY!
 >> "%~dp0.env" echo STEAM_PATH=!STEAM_DIR!
 
-:: Verify .env was written
-if exist "%~dp0.env" (
-    call :log "[OK] Configuration saved to .env"
-) else (
+if not exist "%~dp0.env" (
     call :log "[ERROR] Failed to write .env file!"
     pause
     exit /b 1
 )
+call :log "[OK] Configuration saved to .env"
 
 :: Create dirs
 if not exist "%~dp0data" mkdir "%~dp0data"
@@ -113,11 +104,26 @@ call :log " To start PSS, double-click START.bat"
 call :log "===================================="
 echo.>> "!LOGFILE!"
 echo Finished: %date% %time% >> "!LOGFILE!"
-echo Exit code: 0 >> "!LOGFILE!"
 call :logblank
 pause
 endlocal
 exit /b 0
+
+:: --- Subroutines ---
+
+:detect_steam
+set "STEAM_DIR=C:\Program Files (x86)\Steam"
+where steam.exe >nul 2>&1 && (
+    call :log "[OK] Steam found."
+    goto :eof
+)
+if exist "C:\Program Files (x86)\Steam\steam.exe" (
+    call :log "[OK] Steam found at default location."
+    goto :eof
+)
+call :log "[WARN] Steam not found at default location."
+set /p "STEAM_DIR=  Enter Steam install path: "
+goto :eof
 
 :log
 echo  %~1

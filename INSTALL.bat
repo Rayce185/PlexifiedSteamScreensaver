@@ -2,20 +2,20 @@
 setlocal EnableDelayedExpansion
 title PSS Installer
 
-:: Setup logging - everything gets tee'd to install.log
+:: Setup logging
 set "LOGFILE=%~dp0install.log"
 echo PSS INSTALL LOG > "!LOGFILE!"
 echo Started: %date% %time% >> "!LOGFILE!"
 echo Machine: %COMPUTERNAME% >> "!LOGFILE!"
 echo User: %USERNAME% >> "!LOGFILE!"
 echo WorkDir: %~dp0 >> "!LOGFILE!"
-echo. >> "!LOGFILE!"
+echo.>> "!LOGFILE!"
 
 call :log "===================================="
 call :log " PSS - Plexified Steam Screensaver"
 call :log " First-Time Setup"
 call :log "===================================="
-call :log ""
+call :logblank
 
 :: Check Python
 python --version > "%TEMP%\pss_pyver.txt" 2>&1
@@ -44,11 +44,11 @@ if !PIPERR! neq 0 (
 call :log "[OK] %PIPVER%"
 
 :: Install dependencies
-call :log ""
+call :logblank
 call :log "Installing dependencies..."
 pip install -r "%~dp0requirements.txt" >> "!LOGFILE!" 2>&1
 if errorlevel 1 (
-    call :log "[ERROR] Failed to install dependencies. Check install.log for details."
+    call :log "[ERROR] Failed to install dependencies. Check install.log"
     pause
     exit /b 1
 )
@@ -56,18 +56,18 @@ call :log "[OK] Dependencies installed."
 
 :: Check for existing .env
 if exist "%~dp0.env" (
-    call :log ""
+    call :logblank
     call :log "[OK] .env already exists - skipping setup."
     goto :done
 )
 
 :: Prompt for Steam API key
-call :log ""
+call :logblank
 call :log "-----------------------------------------------"
 call :log " You need a Steam Web API Key to use PSS."
 call :log " Get one here: https://steamcommunity.com/dev/apikey"
 call :log "-----------------------------------------------"
-call :log ""
+call :logblank
 set /p "STEAM_KEY=  Enter your Steam API Key: "
 echo   API Key entered: [%STEAM_KEY:~0,4%...redacted] >> "!LOGFILE!"
 if "!STEAM_KEY!"=="" (
@@ -105,22 +105,26 @@ if not exist "%~dp0data" mkdir "%~dp0data"
 if not exist "%~dp0logs" mkdir "%~dp0logs"
 
 :done
-call :log ""
+call :logblank
 call :log "===================================="
 call :log " Setup complete!"
-call :log ""
+call :logblank
 call :log " To start PSS, double-click START.bat"
 call :log "===================================="
-echo. >> "!LOGFILE!"
+echo.>> "!LOGFILE!"
 echo Finished: %date% %time% >> "!LOGFILE!"
 echo Exit code: 0 >> "!LOGFILE!"
-call :log ""
+call :logblank
 pause
 endlocal
 exit /b 0
 
-:: --- Logging subroutine: prints to screen AND appends to log ---
 :log
 echo  %~1
 echo  %~1 >> "!LOGFILE!"
+goto :eof
+
+:logblank
+echo.
+echo.>> "!LOGFILE!"
 goto :eof

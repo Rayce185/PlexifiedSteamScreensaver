@@ -1,6 +1,6 @@
 """PSS Server -- FastAPI replacement for game_server.py v2."""
 
-import json, os, logging, threading, time, urllib.request, urllib.error
+import json, os, re, logging, threading, time, urllib.request, urllib.error
 from pathlib import Path
 from datetime import datetime
 from contextlib import asynccontextmanager
@@ -76,6 +76,52 @@ def get_installed_appids():
         except Exception:
             pass
     return installed
+
+
+def parse_loginusers_vdf() -> tuple[str, str] | tuple[None, None]:
+    """Read SteamID64 and persona name from Steam's loginusers.vdf."""
+    vdf_path = Path(STEAM_PATH) / "config" / "loginusers.vdf"
+    if not vdf_path.exists():
+        log.warning(f"loginusers.vdf not found at {vdf_path}")
+        return None, None
+    try:
+        text = vdf_path.read_text(encoding="utf-8", errors="ignore")
+        # Find the most recently logged-in user (MostRecent=1)
+        # VDF is a simple nested key-value format
+        current_id = None
+        current_name = None
+        best_id = None
+        best_name = None
+        most_recent = False
+        for line in text.splitlines():
+            line = line.strip().strip('"')
+            # SteamID64 lines are bare numbers as keys
+            if re.match(r"^7656\d{13}$", line):
+                if current_id and most_recent:
+                    best_id, best_name = current_id, current_name
+                current_id = line
+                current_name = None
+                most_recent = False
+            elif '"PersonaName"' in line or '"personaname"' in line:
+                parts = line.split('"')
+                if len(parts) >= 4:
+                    current_name = parts[3]
+            elif '"MostRecent"' in line or '"mostrecent"' in line:
+                if '"1"' in line:
+                    most_recent = True
+        # Check last entry
+        if current_id and most_recent:
+            best_id, best_name = current_id, current_name
+        # If no MostRecent flag found, use first account
+        if not best_id and current_id:
+            best_id = current_id
+            best_name = current_name
+        if best_id:
+            log.info(f"Detected Steam account: {best_id} ({best_name or 'unknown'})")
+        return best_id, best_name
+    except Exception as e:
+        log.error(f"Failed to parse loginusers.vdf: {e}")
+        return None, None
 
 
 def process_games(raw_games):
@@ -233,7 +279,23 @@ async def lifespan(app):
     config = get_config("global")
     STEAM_PATH = config.get("steam_path", STEAM_PATH)
     account = get_active_account()
-    if account:
+    if not account and STEAM_API_KEY:
+        # First run: detect Steam account and auto-fetch library
+        steamid, persona = parse_loginusers_vdf()
+        if steamid:
+            upsert_account(steamid, persona_name=persona or "Owner", is_active=True)
+            account = get_active_account()
+            log.info(f"Auto-created account: {steamid} ({persona or 'Owner'})")
+            # Fetch library on first run
+            games = fetch_steam_library(STEAM_API_KEY, steamid)
+            if games:
+                count = upsert_games(steamid, games)
+                log.info(f"First-run library fetch: {count} games loaded")
+            else:
+                log.error("First-run library fetch failed")
+        else:
+            log.warning("Could not detect Steam account — start enrichment manually after setup")
+    elif account:
         log.info(f"Active account: {account['steamid64']} ({account.get('persona_name', 'unknown')})")
     yield
     log.info("PSS server shutting down")

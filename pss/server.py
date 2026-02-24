@@ -283,7 +283,7 @@ def process_games(raw_games):
 
 
 # Steam misclassifies some delisted games as "advertising"
-_STEAM_TYPE_REMAP = {"advertising": "game"}
+_STEAM_TYPE_REMAP = {"advertising": "game", "dlc": "game"}
 
 def _remap_steam_type(t):
     return _STEAM_TYPE_REMAP.get(t, t)
@@ -508,7 +508,6 @@ def fetch_type_catalog():
     # Query each non-game type separately; games are the default from appdetails
     for filter_param, our_type in [
         ("include_software", "software"),
-        ("include_dlc", "dlc"),
         ("include_hardware", "hardware"),
     ]:
         appids = _fetch_type_page(filter_param, our_type)
@@ -674,6 +673,9 @@ async def lifespan(app):
             log.warning(f"Type corruption detected: {hw_count} hardware apps. Running auto-repair...")
             result = repair_types()
             log.info(f"Auto-repair result: {result}")
+        # Remap any stale types that should be 'game'
+        with get_db() as db:
+            db.execute("UPDATE enrichment SET type = 'game' WHERE type IN ('advertising', 'dlc')")
 
     # Auto-enrich on first run if library is small enough
     if account and STEAM_API_KEY:

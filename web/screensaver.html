@@ -173,7 +173,24 @@
       enabledElements=(CONFIG.display_elements||[]).filter(e=>e.enabled).sort((a,b)=>a.order-b.order).map(e=>e.id);
       const gr=await fetch('/api/games'); const all=await gr.json();
       const ssTypes=CONFIG.screensaver_types||['game'];
-      let eligible=all.filter(g=>!g.excluded&&!g.nsfw_auto&&ssTypes.includes(g.type||'game'));
+      const params=new URLSearchParams(window.location.search);
+      const isPreview=params.get('preview')==='1';
+      let eligible;
+      if(isPreview){
+        try{
+          const stored=localStorage.getItem('pss_preview_appids');
+          if(stored){
+            const previewIds=new Set(JSON.parse(stored));
+            eligible=all.filter(g=>previewIds.has(g.appid));
+          }else{
+            eligible=all.filter(g=>!g.excluded&&!g.nsfw_auto&&ssTypes.includes(g.type||'game'));
+          }
+        }catch(e){
+          eligible=all.filter(g=>!g.excluded&&!g.nsfw_auto&&ssTypes.includes(g.type||'game'));
+        }
+      }else{
+        eligible=all.filter(g=>!g.excluded&&!g.nsfw_auto&&ssTypes.includes(g.type||'game'));
+      }
       for(let i=eligible.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[eligible[i],eligible[j]]=[eligible[j],eligible[i]]}
       games=eligible;
       if(!games.length){document.getElementById('loading').textContent='NO GAMES';return}

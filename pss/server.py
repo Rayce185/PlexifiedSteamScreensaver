@@ -19,6 +19,7 @@ from pss.database import (
     get_exclusions, set_exclusions, toggle_exclusion, bulk_set_exclusions,
     get_full_config, get_config, set_config, set_display_elements,
     get_presets, save_preset, delete_preset, get_distinct_values,
+    snapshot_exclusions, get_exclusion_snapshots, restore_exclusion_snapshot,
     MUTABLE_CONFIG_KEYS
 )
 
@@ -281,6 +282,13 @@ def process_games(raw_games):
     return processed
 
 
+# Steam misclassifies some delisted games as "advertising"
+_STEAM_TYPE_REMAP = {"advertising": "game"}
+
+def _remap_steam_type(t):
+    return _STEAM_TYPE_REMAP.get(t, t)
+
+
 def fetch_app_details(appid):
     url = f"https://store.steampowered.com/api/appdetails?appids={appid}&cc=ch&l=english"
     try:
@@ -313,7 +321,7 @@ def fetch_app_details(appid):
             "vr_support": any("vr" in c.lower() for c in categories),
             "native_platforms": d.get("platforms", {}),
             "screenshots": [s["path_thumbnail"] for s in d.get("screenshots", [])[:3]],
-            "type": d.get("type", "game"), "is_free": d.get("is_free", False),
+            "type": _remap_steam_type(d.get("type", "game")), "is_free": d.get("is_free", False),
             "enriched_at": datetime.utcnow().isoformat()
         }
     except urllib.error.HTTPError as e:
@@ -386,6 +394,31 @@ def enrichment_worker():
         enrichment_state.update(completed=len(to_enrich), phase="complete", running=False,
             message=f"Done! {total} enriched, {enrichment_state['skipped']} skipped, {enrichment_state['errors']} errors")
     log.info(f"Enrichment complete: {total} total, {enrichment_state['skipped']} skipped, {enrichment_state['errors']} errors")
+
+    # Auto-chain: start Deck enrichment if any apps still need it
+    _auto_chain_deck()
+
+
+def _auto_chain_deck():
+    """Start Deck/ProtonDB enrichment automatically after Store enrichment."""
+    global deck_thread
+    account = get_active_account()
+    if not account:
+        return
+    unenriched = get_deck_unenriched_appids(account["steamid64"])
+    if not unenriched:
+        log.info("Auto-chain: no Deck-unenriched apps, skipping")
+        return
+    if deck_state["running"]:
+        log.info("Auto-chain: Deck enrichment already running, skipping")
+        return
+    log.info(f"Auto-chain: starting Deck enrichment for {len(unenriched)} apps")
+    with deck_lock:
+        deck_state.update(running=True, stop_requested=False, phase="starting",
+                          message="Auto-chained from Store enrichment...", errors=0, skipped=0,
+                          types_corrected=0)
+    deck_thread = threading.Thread(target=deck_worker, daemon=True)
+    deck_thread.start()
 
 
 
@@ -672,6 +705,7 @@ async def api_excluded_post(request: Request):
     except: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
     if "excluded" not in data or not isinstance(data["excluded"], list):
         return JSONResponse({"error": "Expected {excluded: [int, ...]}"}, status_code=400)
+    snapshot_exclusions(acct["steamid64"], "pre-set-exclusions")
     count = set_exclusions(acct["steamid64"], data["excluded"])
     log.info(f"Exclusion list updated: {count} excluded")
     return JSONResponse({"ok": True, "count": count})
@@ -697,9 +731,38 @@ async def api_bulk_exclusion(request: Request):
     appids = data.get("appids", [])
     exclude = data.get("exclude", True)
     if not appids: return JSONResponse({"error": "No appids"}, status_code=400)
+    snapshot_exclusions(acct["steamid64"], f"pre-bulk-{'exclude' if exclude else 'include'}")
     count = bulk_set_exclusions(acct["steamid64"], appids, exclude)
     log.info(f"Bulk exclusion: {count} games {'excluded' if exclude else 'included'}")
     return JSONResponse({"ok": True, "count": count, "excluded": exclude})
+
+
+@app.post("/api/exclusion-snapshot")
+async def api_exclusion_snapshot(request: Request):
+    """Manually snapshot current exclusion state."""
+    acct = get_active_account()
+    if not acct: return JSONResponse({"error": "No active account"}, status_code=400)
+    try: data = await request.json()
+    except: data = {}
+    label = data.get("label", "manual")
+    count = snapshot_exclusions(acct["steamid64"], label)
+    log.info(f"Exclusion snapshot: {count} exclusions saved (label={label})")
+    return JSONResponse({"ok": True, "count": count})
+
+@app.get("/api/exclusion-snapshots")
+async def api_exclusion_snapshots():
+    acct = get_active_account()
+    if not acct: return JSONResponse([])
+    return JSONResponse(get_exclusion_snapshots(acct["steamid64"]))
+
+@app.post("/api/exclusion-restore/{snapshot_id}")
+async def api_exclusion_restore(snapshot_id: int):
+    acct = get_active_account()
+    if not acct: return JSONResponse({"error": "No active account"}, status_code=400)
+    count = restore_exclusion_snapshot(acct["steamid64"], snapshot_id)
+    if count is None: return JSONResponse({"error": "Snapshot not found"}, status_code=404)
+    log.info(f"Exclusion restored from snapshot {snapshot_id}: {count} exclusions")
+    return JSONResponse({"ok": True, "count": count})
 
 
 # === CONFIG API ===

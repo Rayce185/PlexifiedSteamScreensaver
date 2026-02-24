@@ -75,6 +75,12 @@ CREATE INDEX IF NOT EXISTS idx_exclusions_account ON exclusions(account_id);
 CREATE INDEX IF NOT EXISTS idx_enrichment_type ON enrichment(type);
 CREATE INDEX IF NOT EXISTS idx_config_scope ON config(scope);
 CREATE INDEX IF NOT EXISTS idx_presets_account ON presets(account_id);
+CREATE TABLE IF NOT EXISTS exclusion_snapshots (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL, label TEXT NOT NULL,
+    appids TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (account_id) REFERENCES accounts(steamid64)
+);
 """
 
 MUTABLE_CONFIG_KEYS = {
@@ -166,7 +172,7 @@ def _migrate_to_v3(db):
                        (key, json.dumps(value)))
 
 def _migrate_to_v4(db):
-    """Migration v3 to v4: add Deck/ProtonDB columns, display elements."""
+    """Migration v3 to v4: add Deck/ProtonDB columns, seed missing display elements."""
     existing = [r[1] for r in db.execute("PRAGMA table_info(enrichment)").fetchall()]
     for col, coltype in [
         ("deck_verified", "INTEGER DEFAULT 0"),
@@ -177,6 +183,31 @@ def _migrate_to_v4(db):
     ]:
         if col not in existing:
             db.execute(f"ALTER TABLE enrichment ADD COLUMN {col} {coltype}")
+    # Seed missing display elements for existing accounts (deck_verified, protondb)
+    _seed_missing_display_elements(db)
+
+
+def _seed_missing_display_elements(db):
+    """Add any missing display elements to accounts that already have some configured."""
+    accounts = db.execute("SELECT steamid64 FROM accounts").fetchall()
+    for acct in accounts:
+        aid = acct["steamid64"]
+        existing = db.execute(
+            "SELECT element_id FROM display_elements WHERE account_id = ?", (aid,)
+        ).fetchall()
+        if not existing:
+            continue  # Will be seeded on first access by get_display_elements()
+        existing_ids = {r["element_id"] for r in existing}
+        max_order = db.execute(
+            "SELECT MAX(sort_order) as m FROM display_elements WHERE account_id = ?", (aid,)
+        ).fetchone()["m"] or 0
+        for defn in DEFAULT_DISPLAY_ELEMENTS:
+            if defn["id"] not in existing_ids:
+                max_order += 1
+                db.execute(
+                    "INSERT INTO display_elements (account_id, element_id, enabled, sort_order) VALUES (?,?,?,?)",
+                    (aid, defn["id"], int(defn["enabled"]), max_order)
+                )
 
 
 def _seed_builtin_presets(db, account_id):
@@ -612,3 +643,46 @@ def get_distinct_values(account_id):
         "developers": sorted(set(r["developer"] for r in devs)),
         "controller_support": sorted(set(r["controller_support"] for r in controllers)),
     }
+
+def snapshot_exclusions(account_id, label="manual"):
+    """Save current exclusion list as a snapshot. Keeps max 5 per account."""
+    import json as _json
+    with get_db() as db:
+        current = db.execute("SELECT appid FROM exclusions WHERE account_id = ?", (account_id,)).fetchall()
+        appids = [r["appid"] for r in current]
+        db.execute("INSERT INTO exclusion_snapshots (account_id, label, appids) VALUES (?, ?, ?)",
+                   (account_id, label, _json.dumps(appids)))
+        # Prune old snapshots (keep newest 5)
+        db.execute("""DELETE FROM exclusion_snapshots WHERE account_id = ? AND id NOT IN (
+            SELECT id FROM exclusion_snapshots WHERE account_id = ? ORDER BY created_at DESC LIMIT 5
+        )""", (account_id, account_id))
+    return len(appids)
+
+
+def get_exclusion_snapshots(account_id):
+    """Get list of available snapshots (newest first)."""
+    import json as _json
+    with get_db() as db:
+        rows = db.execute("""SELECT id, label, appids, created_at FROM exclusion_snapshots
+            WHERE account_id = ? ORDER BY created_at DESC LIMIT 5""", (account_id,)).fetchall()
+    result = []
+    for r in rows:
+        appids = _json.loads(r["appids"])
+        result.append({"id": r["id"], "label": r["label"], "count": len(appids), "created_at": r["created_at"]})
+    return result
+
+
+def restore_exclusion_snapshot(account_id, snapshot_id):
+    """Restore exclusion list from a snapshot. Snapshots current state first."""
+    import json as _json
+    with get_db() as db:
+        snap = db.execute("SELECT appids FROM exclusion_snapshots WHERE id = ? AND account_id = ?",
+                          (snapshot_id, account_id)).fetchone()
+        if not snap:
+            return None
+        appids = _json.loads(snap["appids"])
+    # Snapshot current state before restoring
+    snapshot_exclusions(account_id, label="pre-restore")
+    set_exclusions(account_id, appids)
+    return len(appids)
+

@@ -242,7 +242,7 @@ input[type=file]{display:none}
     <span>Shovelware: <span class="stat-val" id="st-shovelware" style="color:var(--red)">-</span></span>
   </div>
   <div class="header-actions">
-    <button class="btn btn-accent" onclick="window.open('/screensaver','_blank')">&#9654; Preview</button>
+    <button class="btn btn-accent" onclick="openPreview()">&#9654; Preview</button>
   </div>
 </div>
 
@@ -318,6 +318,12 @@ input[type=file]{display:none}
     <div class="bulk-actions">
       <button class="btn btn-sm btn-green" onclick="bulkInclude()">&#10003; Include All Filtered</button>
       <button class="btn btn-sm btn-red" onclick="bulkExclude()">&#10007; Exclude All Filtered</button>
+      <span style="width:1px;height:18px;background:var(--border);margin:0 2px"></span>
+      <button class="btn btn-sm btn-accent" onclick="selectFilteredOnly()" title="Exclude everything, then include only what matches current filter">&#127919; Select Filtered Only</button>
+      <button class="btn btn-sm" onclick="excludeAllLibrary()" title="Exclude every game in the library">&#10060; Exclude All</button>
+      <span style="width:1px;height:18px;background:var(--border);margin:0 2px"></span>
+      <button class="btn btn-sm" onclick="openRevertMenu()" id="revert-btn" title="Restore previous exclusion state">&#8630; Revert</button>
+      <div class="sort-menu" id="revert-menu" style="right:auto;left:0"></div>
     </div>
   </div>
 
@@ -1518,6 +1524,7 @@ function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t
 document.addEventListener('click',e=>{
   if(!e.target.closest('.sort-wrap')) document.getElementById('sort-menu').classList.remove('open');
   if(!e.target.closest('.preset-wrap')) document.getElementById('preset-menu').classList.remove('open');
+  if(!e.target.closest('#revert-btn')&&!e.target.closest('#revert-menu')) document.getElementById('revert-menu').classList.remove('open');
 });
 
 // Keyboard shortcuts
@@ -1529,6 +1536,76 @@ document.addEventListener('keydown',e=>{
   }
   if(e.key==='/' && !e.target.matches('input')){e.preventDefault();document.getElementById('search').focus()}
 });
+
+// === PREVIEW WITH FILTER ===
+window.openPreview=function(){
+  const filtered=getFiltered().filter(g=>!g.excluded&&!g.nsfw_auto);
+  const appids=filtered.map(g=>g.appid);
+  try{localStorage.setItem('pss_preview_appids',JSON.stringify(appids))}catch(e){}
+  window.open('/screensaver?preview=1','_blank');
+};
+
+// === SELECT FILTERED ONLY ===
+window.selectFilteredOnly=async function(){
+  const filtered=getFiltered();
+  const filteredIds=new Set(filtered.map(g=>g.appid));
+  const toExclude=ALL.filter(g=>!filteredIds.has(g.appid)&&!g.nsfw_auto&&!g.excluded);
+  const toInclude=ALL.filter(g=>filteredIds.has(g.appid)&&g.excluded&&!g.nsfw_auto);
+  if(!toExclude.length&&!toInclude.length){toast('No changes needed');return}
+  // Optimistic UI
+  toExclude.forEach(g=>g.excluded=true);
+  toInclude.forEach(g=>g.excluded=false);
+  applyView();
+  // Build full exclusion list
+  const newExcluded=ALL.filter(g=>g.excluded||g.nsfw_auto).filter(g=>g.excluded).map(g=>g.appid);
+  try{
+    await fetch('/api/excluded',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({excluded:newExcluded})});
+    toast(filtered.length+' games selected, '+(ALL.length-filtered.length)+' excluded');
+  }catch(e){toast('Failed');ALL=await fetch('/api/games').then(r=>r.json());applyView()}
+};
+
+// === EXCLUDE ALL LIBRARY ===
+window.excludeAllLibrary=async function(){
+  const includable=ALL.filter(g=>!g.excluded&&!g.nsfw_auto);
+  if(!includable.length){toast('All already excluded');return}
+  includable.forEach(g=>g.excluded=true);
+  applyView();
+  const allExcluded=ALL.filter(g=>g.excluded).map(g=>g.appid);
+  try{
+    await fetch('/api/excluded',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({excluded:allExcluded})});
+    toast(includable.length+' games excluded');
+  }catch(e){toast('Failed');ALL=await fetch('/api/games').then(r=>r.json());applyView()}
+};
+
+// === REVERT MENU ===
+window.openRevertMenu=async function(){
+  const menu=document.getElementById('revert-menu');
+  if(menu.classList.contains('open')){menu.classList.remove('open');return}
+  menu.innerHTML='<div style="padding:8px 12px;font-size:.72rem;color:var(--text-faint)">Loading...</div>';
+  menu.classList.add('open');
+  try{
+    const r=await fetch('/api/exclusion-snapshots');const snaps=await r.json();
+    if(!snaps.length){menu.innerHTML='<div style="padding:8px 12px;font-size:.78rem;color:var(--text-dim)">No snapshots available</div>';return}
+    menu.innerHTML=snaps.map(s=>{
+      const d=new Date(s.created_at+'Z');
+      const ts=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      const ds=d.toLocaleDateString([],{month:'short',day:'numeric'});
+      return '<div class="sort-opt" onclick="revertSnapshot('+s.id+')">'+s.label+' <span style="color:var(--text-faint);font-size:.7rem">'+s.count+' excl \u00b7 '+ds+' '+ts+'</span></div>';
+    }).join('');
+  }catch(e){menu.innerHTML='<div style="padding:8px 12px;color:var(--red);font-size:.78rem">Failed to load</div>'}
+};
+
+window.revertSnapshot=async function(id){
+  document.getElementById('revert-menu').classList.remove('open');
+  try{
+    const r=await fetch('/api/exclusion-restore/'+id,{method:'POST'});const d=await r.json();
+    if(d.ok){
+      ALL=await fetch('/api/games').then(r=>r.json());
+      applyView();updateStats();
+      toast('Restored: '+d.count+' exclusions');
+    }else toast(d.error||'Failed');
+  }catch(e){toast('Restore failed')}
+};
 
 renderQuickChips();
 init();

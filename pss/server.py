@@ -433,18 +433,17 @@ def fetch_protondb_tier(appid):
         return None
 
 
-def fetch_type_catalog():
-    """Download Steam app catalog from IStoreService/GetAppList for type correction.
-    Returns dict of {appid: app_type}."""
-    if not STEAM_API_KEY:
-        log.warning("No Steam API key for IStoreService type lookup")
-        return {}
-    type_map = {}
+def _fetch_type_page(type_filter, our_type):
+    """Paginate IStoreService/GetAppList with a single include_* filter.
+    Returns set of appids matching that type."""
+    appids = set()
     last_appid = 0
     page = 0
     while True:
         url = (f"https://api.steampowered.com/IStoreService/GetAppList/v1/"
-               f"?key={STEAM_API_KEY}&max_results=50000&last_appid={last_appid}")
+               f"?key={STEAM_API_KEY}&max_results=50000&last_appid={last_appid}"
+               f"&include_games=false&include_dlc=false&include_software=false"
+               f"&include_videos=false&include_hardware=false&{type_filter}=true")
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "PSS/0.2"})
             with urllib.request.urlopen(req, timeout=30) as resp:
@@ -452,27 +451,37 @@ def fetch_type_catalog():
             apps = data.get("response", {}).get("apps", [])
             if not apps:
                 break
-            for app in apps:
-                aid = app.get("appid")
-                atype = app.get("type", "").lower()
-                # IStoreService uses: game, dlc, music, application, tool, demo, episode, hardware
-                # Normalize to our types
-                if atype in ("game", "dlc", "music", "demo"):
-                    type_map[aid] = atype
-                elif atype == "application":
-                    type_map[aid] = "software"
-                elif atype in ("tool", "config"):
-                    type_map[aid] = "tool"
-                elif atype:
-                    type_map[aid] = atype
+            appids.update(app.get("appid") for app in apps)
             last_appid = apps[-1]["appid"]
             page += 1
-            log.info(f"IStoreService catalog page {page}: {len(apps)} apps (total {len(type_map)})")
+            log.info(f"IStoreService {our_type} page {page}: {len(apps)} apps (running total {len(appids)})")
             if len(apps) < 50000:
                 break
         except Exception as e:
-            log.error(f"IStoreService catalog fetch failed on page {page}: {e}")
+            log.error(f"IStoreService {our_type} fetch failed on page {page}: {e}")
             break
+    return appids
+
+
+def fetch_type_catalog():
+    """Download Steam app catalog from IStoreService/GetAppList for type correction.
+    IStoreService does NOT return a type field — you must query per type using include_* filters.
+    Returns dict of {appid: app_type} for non-game types only (software, dlc, hardware)."""
+    if not STEAM_API_KEY:
+        log.warning("No Steam API key for IStoreService type lookup")
+        return {}
+    type_map = {}
+    # Query each non-game type separately; games are the default from appdetails
+    for filter_param, our_type in [
+        ("include_software", "software"),
+        ("include_dlc", "dlc"),
+        ("include_hardware", "hardware"),
+    ]:
+        appids = _fetch_type_page(filter_param, our_type)
+        for aid in appids:
+            type_map[aid] = our_type
+        log.info(f"IStoreService {our_type}: {len(appids)} apps cataloged")
+    log.info(f"IStoreService type catalog complete: {len(type_map)} non-game apps")
     return type_map
 
 

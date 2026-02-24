@@ -809,7 +809,7 @@ function updateStats(){
       c.onclick=function(){toggleDeckFilter(d)};
       dc.appendChild(c);
     });
-    cont.parentElement.appendChild(dc);
+    document.getElementById('type-chips').parentElement.appendChild(dc);
   }
 
   const sw=ALL.filter(g=>isShovelware(g));

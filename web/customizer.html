@@ -391,6 +391,8 @@ input[type=file]{display:none}
     <div style="margin-top:8px"><button class="btn btn-accent" onclick="saveShovelwareSettings()">Save Shovelware Settings</button></div>
 
     <div class="section-title" id="sec-data" style="margin-top:28px">&#128190; Data Management</div>
+    <div class="setting-row"><div><div class="setting-label">Auto-enrich on first startup</div><div class="setting-desc">If library size is at or below this threshold, Store + SteamSpy enrichment runs automatically on first launch. Set to 0 to disable.</div></div><div class="setting-input"><input type="number" id="cfg-auto-enrich" min="0" max="2000" step="50"><span class="setting-unit">games</span></div></div>
+    <div class="setting-row"><div><div class="setting-label">Auto-refresh library on startup</div><div class="setting-desc">Re-fetch your Steam library every time the server starts (catches new purchases/installs)</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="cfg-auto-refresh"><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div></div>
     <div class="data-actions">
       <button class="btn" onclick="exportSettings()">&#11015; Export Settings</button>
       <button class="btn" onclick="document.getElementById('import-file').click()">&#11014; Import Settings</button>
@@ -1152,6 +1154,9 @@ function loadSettings(){
   document.getElementById('s-title').value=CONFIG.screensaver_title_delay_seconds||3;
   document.getElementById('s-kb').value=CONFIG.ken_burns_intensity||0.7;
   document.getElementById('kb-val').textContent=(CONFIG.ken_burns_intensity||0.7).toFixed(2);
+  // Auto-enrich settings
+  document.getElementById('cfg-auto-enrich').value=CONFIG.auto_enrich_threshold||200;
+  document.getElementById('cfg-auto-refresh').checked=CONFIG.auto_refresh_on_startup||false;
   // Shovelware settings
   document.getElementById('sw-min').value=CONFIG.shovelware_min_signals||3;
   document.getElementById('sw-avgpt').value=CONFIG.shovelware_avg_playtime_threshold||30;
@@ -1348,6 +1353,22 @@ window.importSettings=async function(e){
   e.target.value='';
 };
 window.exportGameData=function(){dl('screensaver-games.json',JSON.stringify(ALL,null,2))};
+window.saveAutoSettings=async function(){
+  const u={
+    auto_enrich_threshold:parseInt(document.getElementById('cfg-auto-enrich').value)||0,
+    auto_refresh_on_startup:document.getElementById('cfg-auto-refresh').checked
+  };
+  Object.assign(CONFIG,u);
+  await saveConfig(u);
+};
+// Auto-save on change
+document.addEventListener('DOMContentLoaded',()=>{
+  const ae=document.getElementById('cfg-auto-enrich');
+  const ar=document.getElementById('cfg-auto-refresh');
+  if(ae) ae.addEventListener('change',saveAutoSettings);
+  if(ar) ar.addEventListener('change',saveAutoSettings);
+});
+
 window.refreshLibrary=async function(){
   toast('Refreshing from Steam...');
   try{

@@ -82,7 +82,8 @@ MUTABLE_CONFIG_KEYS = {
     "shovelware_owners_threshold", "shovelware_require_unplayed",
     "shovelware_enable_avg_playtime", "shovelware_enable_reviews",
     "shovelware_enable_ratio", "shovelware_enable_owners",
-    "shovelware_enable_user_playtime", "shovelware_enable_metacritic"
+    "shovelware_enable_user_playtime", "shovelware_enable_metacritic",
+    "auto_enrich_threshold", "auto_refresh_on_startup"
 }
 
 BUILTIN_PRESETS = [

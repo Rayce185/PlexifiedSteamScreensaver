@@ -382,6 +382,33 @@ async def lifespan(app):
             log.warning("Could not detect Steam account — start enrichment manually after setup")
     elif account:
         log.info(f"Active account: {account['steamid64']} ({account.get('persona_name', 'unknown')})")
+        # Auto-refresh library on startup if configured
+        cfg = get_full_config()
+        if cfg.get("auto_refresh_on_startup", False) and STEAM_API_KEY:
+            log.info("Auto-refreshing library on startup...")
+            games = fetch_steam_library(STEAM_API_KEY, account["steamid64"])
+            if games:
+                count = upsert_games(account["steamid64"], games)
+                log.info(f"Auto-refresh complete: {count} games")
+
+    # Auto-enrich on first run if library is small enough
+    if account and STEAM_API_KEY:
+        cfg = get_full_config()
+        threshold = cfg.get("auto_enrich_threshold", 200)
+        existing_games = get_games(account["steamid64"])
+        unenriched = get_unenriched_appids(account["steamid64"])
+        total = len(existing_games)
+        need_enrich = len(unenriched)
+        if need_enrich > 0 and total <= threshold and not enrichment_state["running"]:
+            log.info(f"Auto-enrich: {total} games in library (<= {threshold} threshold), "
+                     f"{need_enrich} unenriched — starting automatically")
+            enrichment_state.update(running=True, stop_requested=False, phase="starting",
+                                    message="Auto-enrichment starting...", errors=0)
+            enrichment_thread = threading.Thread(target=enrichment_worker, daemon=True)
+            enrichment_thread.start()
+        elif need_enrich > 0 and total > threshold:
+            log.info(f"Library has {total} games (> {threshold} threshold) — "
+                     f"skipping auto-enrich, {need_enrich} unenriched")
     yield
     log.info("PSS server shutting down")
 

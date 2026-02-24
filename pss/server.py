@@ -469,14 +469,15 @@ def fetch_protondb_tier(appid):
 def _fetch_type_page(type_filter, our_type):
     """Paginate IStoreService/GetAppList with a single include_* filter.
     Returns set of appids matching that type."""
+    # Build include params: all false EXCEPT the one we want
+    ALL_INCLUDES = ["include_games", "include_dlc", "include_software", "include_videos", "include_hardware"]
+    params = "&".join(f"{p}={'true' if p == type_filter else 'false'}" for p in ALL_INCLUDES)
     appids = set()
     last_appid = 0
     page = 0
     while True:
         url = (f"https://api.steampowered.com/IStoreService/GetAppList/v1/"
-               f"?key={STEAM_API_KEY}&max_results=50000&last_appid={last_appid}"
-               f"&include_games=false&include_dlc=false&include_software=false"
-               f"&include_videos=false&include_hardware=false&{type_filter}=true")
+               f"?key={STEAM_API_KEY}&max_results=50000&last_appid={last_appid}&{params}")
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "PSS/0.2"})
             with urllib.request.urlopen(req, timeout=30) as resp:
@@ -516,6 +517,30 @@ def fetch_type_catalog():
         log.info(f"IStoreService {our_type}: {len(appids)} apps cataloged")
     log.info(f"IStoreService type catalog complete: {len(type_map)} non-game apps")
     return type_map
+
+
+def repair_types():
+    """Reset all enriched types to 'game', then apply correct IStoreService corrections.
+    Used to recover from type corruption."""
+    account = get_active_account()
+    if not account:
+        return {"error": "No active account"}
+    from pss.database import get_db
+    # Step 1: Reset all enriched types to 'game'
+    with get_db() as db:
+        r = db.execute("UPDATE enrichment SET type = 'game' WHERE type != 'game'")
+        reset_count = r.rowcount
+    log.info(f"Type repair: reset {reset_count} apps to 'game'")
+    # Step 2: Fetch correct catalog
+    catalog = fetch_type_catalog()
+    if not catalog:
+        return {"error": "Catalog fetch failed", "reset": reset_count}
+    # Step 3: Apply correct non-game types
+    owned = get_all_enriched_appids(account["steamid64"])
+    relevant = {aid: t for aid, t in catalog.items() if aid in owned}
+    corrected = bulk_update_app_types(relevant)
+    log.info(f"Type repair: {corrected} apps reclassified from {len(relevant)} matches")
+    return {"ok": True, "reset": reset_count, "corrected": corrected}
 
 
 def deck_worker():
@@ -920,6 +945,14 @@ async def api_deck_stop():
     with deck_lock:
         deck_state.update(stop_requested=True, message="Stopping...")
     return JSONResponse({"ok": True, "message": "Stop requested"})
+
+
+@app.post("/api/repair-types")
+async def api_repair_types():
+    result = repair_types()
+    if "error" in result:
+        return JSONResponse(result, status_code=400 if result["error"] == "No active account" else 500)
+    return JSONResponse(result)
 
 
 def main():

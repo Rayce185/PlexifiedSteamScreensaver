@@ -665,6 +665,16 @@ async def lifespan(app):
                 count = upsert_games(account["steamid64"], games)
                 log.info(f"Auto-refresh complete: {count} games")
 
+    # One-time repair: fix type corruption from IStoreService duplicate param bug
+    if account and STEAM_API_KEY:
+        from pss.database import get_db
+        with get_db() as db:
+            hw_count = db.execute("SELECT COUNT(*) as c FROM enrichment WHERE type='hardware'").fetchone()["c"]
+        if hw_count > 20:  # Normal libraries have 0-2 hardware apps
+            log.warning(f"Type corruption detected: {hw_count} hardware apps. Running auto-repair...")
+            result = repair_types()
+            log.info(f"Auto-repair result: {result}")
+
     # Auto-enrich on first run if library is small enough
     if account and STEAM_API_KEY:
         cfg = get_full_config()

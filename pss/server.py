@@ -748,6 +748,8 @@ async def lifespan(app):
     else:
         log.warning("No accounts detected — configure via /customizer")
 
+    api_key_for_enrich = get_api_key_for(account["steamid64"]) if account else ""
+
     # One-time repair: fix type corruption from IStoreService duplicate param bug
     if account and api_key_for_enrich:
         from pss.database import get_db
@@ -762,7 +764,6 @@ async def lifespan(app):
             db.execute("UPDATE enrichment SET type = 'game' WHERE type IN ('advertising', 'dlc')")
 
     # Auto-enrich on first run if library is small enough
-    api_key_for_enrich = get_api_key_for(account["steamid64"]) if account else ""
     if account and api_key_for_enrich:
         cfg = get_full_config()
         threshold = cfg.get("auto_enrich_threshold", 200)

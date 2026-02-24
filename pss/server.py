@@ -12,7 +12,8 @@ import uvicorn
 
 from pss.database import (
     init_db, get_active_account, upsert_account, get_games, upsert_games,
-    upsert_enrichment, get_unenriched_appids, get_enrichment_count,
+    upsert_enrichment, upsert_steamspy, get_unenriched_appids,
+    get_steamspy_unenriched_appids, get_enrichment_count,
     get_exclusions, set_exclusions, toggle_exclusion, bulk_set_exclusions,
     get_full_config, get_config, set_config, set_display_elements,
     get_presets, save_preset, delete_preset, get_distinct_values,
@@ -44,6 +45,71 @@ enrichment_state = {
 }
 enrichment_lock = threading.Lock()
 enrichment_thread = None
+
+steamspy_state = {
+    "running": False, "stop_requested": False,
+    "total": 0, "completed": 0, "errors": 0,
+    "current_game": "", "current_appid": 0,
+    "started_at": None, "eta_seconds": 0,
+    "phase": "idle", "message": ""
+}
+steamspy_lock = threading.Lock()
+steamspy_thread = None
+
+
+def fetch_steamspy_data(appid):
+    url = f"https://steamspy.com/api.php?request=appdetails&appid={appid}"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "PSS/0.1"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+        if not data or data.get("name") == "Unknown":
+            return None
+        data["enriched_at"] = datetime.utcnow().isoformat()
+        return data
+    except Exception:
+        return None
+
+
+def steamspy_worker():
+    global steamspy_state
+    account = get_active_account()
+    if not account:
+        with steamspy_lock:
+            steamspy_state.update(phase="error", message="No active account", running=False)
+        return
+    to_enrich = get_steamspy_unenriched_appids(account["steamid64"])
+    with steamspy_lock:
+        steamspy_state.update(total=len(to_enrich), completed=0, errors=0,
+            phase="running", message=f"Fetching SteamSpy data for {len(to_enrich)} games",
+            started_at=time.time())
+    log.info(f"SteamSpy enrichment starting: {len(to_enrich)} to process")
+    for i, (appid, name) in enumerate(to_enrich):
+        if steamspy_state["stop_requested"]:
+            with steamspy_lock:
+                steamspy_state.update(phase="stopped", message=f"Stopped at {i}/{len(to_enrich)}", running=False)
+            return
+        with steamspy_lock:
+            steamspy_state["current_game"] = name
+            steamspy_state["current_appid"] = appid
+            steamspy_state["completed"] = i
+            elapsed = time.time() - steamspy_state["started_at"]
+            if i > 0:
+                steamspy_state["eta_seconds"] = int((len(to_enrich) - i) * (elapsed / i))
+        result = fetch_steamspy_data(appid)
+        if result:
+            upsert_steamspy(appid, result)
+        else:
+            with steamspy_lock:
+                steamspy_state["errors"] += 1
+        # SteamSpy allows ~4 req/sec, use 0.3s to be safe
+        time.sleep(0.3)
+        if (i + 1) % 100 == 0:
+            log.info(f"SteamSpy checkpoint: {i+1}/{len(to_enrich)}")
+    with steamspy_lock:
+        steamspy_state.update(completed=len(to_enrich), phase="complete", running=False,
+            message=f"Done! {len(to_enrich)} games processed, {steamspy_state['errors']} errors")
+    log.info(f"SteamSpy enrichment complete: {len(to_enrich)} processed, {steamspy_state['errors']} errors")
 
 
 def fetch_steam_library(api_key, steamid):
@@ -471,6 +537,31 @@ async def api_enrichment_stop():
     if not enrichment_state["running"]: return JSONResponse({"error": "Not running"}, status_code=409)
     with enrichment_lock:
         enrichment_state.update(stop_requested=True, message="Stopping...")
+    return JSONResponse({"ok": True, "message": "Stop requested"})
+
+
+# === STEAMSPY ENRICHMENT API ===
+
+@app.post("/api/steamspy/start")
+async def api_steamspy_start():
+    global steamspy_thread
+    if steamspy_state["running"]: return JSONResponse({"error": "Already running"}, status_code=409)
+    with steamspy_lock:
+        steamspy_state.update(running=True, stop_requested=False, phase="starting",
+                              message="Starting SteamSpy enrichment...", errors=0)
+    steamspy_thread = threading.Thread(target=steamspy_worker, daemon=True)
+    steamspy_thread.start()
+    return JSONResponse({"ok": True, "message": "SteamSpy enrichment started"})
+
+@app.get("/api/steamspy/status")
+async def api_steamspy_status():
+    with steamspy_lock: return JSONResponse(dict(steamspy_state))
+
+@app.post("/api/steamspy/stop")
+async def api_steamspy_stop():
+    if not steamspy_state["running"]: return JSONResponse({"error": "Not running"}, status_code=409)
+    with steamspy_lock:
+        steamspy_state.update(stop_requested=True, message="Stopping...")
     return JSONResponse({"ok": True, "message": "Stop requested"})
 
 

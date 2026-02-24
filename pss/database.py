@@ -6,7 +6,7 @@ from datetime import datetime
 from contextlib import contextmanager
 
 DB_PATH = None
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -32,7 +32,10 @@ CREATE TABLE IF NOT EXISTS enrichment (
     developer TEXT, publisher TEXT, release_date TEXT, coming_soon INTEGER DEFAULT 0,
     metacritic_score INTEGER, short_description TEXT, controller_support TEXT DEFAULT 'none',
     vr_support INTEGER DEFAULT 0, platforms TEXT, screenshots TEXT, is_free INTEGER DEFAULT 0,
-    enriched_at TEXT, permanently_unenrichable INTEGER DEFAULT 0
+    enriched_at TEXT, permanently_unenrichable INTEGER DEFAULT 0,
+    steamspy_owners TEXT, steamspy_avg_playtime INTEGER,
+    steamspy_positive INTEGER, steamspy_negative INTEGER,
+    steamspy_enriched_at TEXT
 );
 CREATE TABLE IF NOT EXISTS exclusions (
     account_id TEXT NOT NULL, appid INTEGER NOT NULL, reason TEXT DEFAULT 'manual',
@@ -73,7 +76,10 @@ MUTABLE_CONFIG_KEYS = {
     "mute_after_seconds", "screensaver_after_seconds", "sleep_after_seconds",
     "screensaver_slide_duration_seconds", "screensaver_transition_seconds",
     "screensaver_title_delay_seconds", "ken_burns_intensity", "log_level",
-    "screensaver_types"
+    "screensaver_types",
+    "shovelware_min_signals", "shovelware_avg_playtime_threshold",
+    "shovelware_reviews_threshold", "shovelware_review_ratio_threshold",
+    "shovelware_owners_threshold", "shovelware_require_unplayed"
 }
 
 BUILTIN_PRESETS = [
@@ -95,6 +101,8 @@ def init_db(db_path):
         old_version = int(row["value"]) if row else 0
         if old_version < 2:
             _migrate_to_v2(db)
+        if old_version < 3:
+            _migrate_to_v3(db)
         db.execute("INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)",
                     ("schema_version", str(SCHEMA_VERSION)))
 
@@ -110,6 +118,35 @@ def _migrate_to_v2(db):
     accounts = db.execute("SELECT steamid64 FROM accounts").fetchall()
     for acct in accounts:
         _seed_builtin_presets(db, acct["steamid64"])
+
+SHOVELWARE_DEFAULTS = {
+    "shovelware_min_signals": 3,
+    "shovelware_avg_playtime_threshold": 30,
+    "shovelware_reviews_threshold": 100,
+    "shovelware_review_ratio_threshold": 60,
+    "shovelware_owners_threshold": 50000,
+    "shovelware_require_unplayed": True,
+}
+
+def _migrate_to_v3(db):
+    """Migration v2 to v3: add SteamSpy columns to enrichment, seed shovelware config."""
+    # Add columns if they don't exist
+    existing = [r[1] for r in db.execute("PRAGMA table_info(enrichment)").fetchall()]
+    for col, coltype, default in [
+        ("steamspy_owners", "TEXT", None),
+        ("steamspy_avg_playtime", "INTEGER", None),
+        ("steamspy_positive", "INTEGER", None),
+        ("steamspy_negative", "INTEGER", None),
+        ("steamspy_enriched_at", "TEXT", None),
+    ]:
+        if col not in existing:
+            db.execute(f"ALTER TABLE enrichment ADD COLUMN {col} {coltype}")
+    # Seed shovelware config defaults
+    for key, value in SHOVELWARE_DEFAULTS.items():
+        existing_cfg = db.execute("SELECT 1 FROM config WHERE scope='global' AND key=?", (key,)).fetchone()
+        if not existing_cfg:
+            db.execute("INSERT INTO config (scope, key, value) VALUES ('global', ?, ?)",
+                       (key, json.dumps(value)))
 
 def _seed_builtin_presets(db, account_id):
     for bp in BUILTIN_PRESETS:
@@ -176,6 +213,8 @@ def get_games(account_id):
                    e.release_date, e.coming_soon, e.metacritic_score, e.short_description,
                    e.controller_support, e.vr_support, e.platforms AS native_platforms,
                    e.screenshots, e.is_free, e.enriched_at,
+                   e.steamspy_owners, e.steamspy_avg_playtime,
+                   e.steamspy_positive, e.steamspy_negative,
                    CASE WHEN e.appid IS NOT NULL THEN 1 ELSE 0 END AS enriched,
                    CASE WHEN x.appid IS NOT NULL THEN 1 ELSE 0 END AS excluded
             FROM games g
@@ -275,6 +314,31 @@ def upsert_enrichment(appid, data):
             json.dumps(data.get("screenshots", [])),
             int(data.get("is_free", False)), data.get("enriched_at")
         ))
+
+def upsert_steamspy(appid, data):
+    with get_db() as db:
+        db.execute("""
+            UPDATE enrichment SET
+                steamspy_owners = ?, steamspy_avg_playtime = ?,
+                steamspy_positive = ?, steamspy_negative = ?,
+                steamspy_enriched_at = ?
+            WHERE appid = ?
+        """, (
+            data.get("owners", ""), data.get("average_forever", 0),
+            data.get("positive", 0), data.get("negative", 0),
+            data.get("enriched_at"), appid
+        ))
+
+def get_steamspy_unenriched_appids(account_id):
+    """Get appids that have store enrichment but no SteamSpy data."""
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT g.appid, g.name FROM games g
+            INNER JOIN enrichment e ON g.appid = e.appid
+            WHERE g.account_id = ? AND e.steamspy_enriched_at IS NULL
+            ORDER BY g.name COLLATE NOCASE
+        """, (account_id,)).fetchall()
+        return [(r["appid"], r["name"]) for r in rows]
 
 def get_unenriched_appids(account_id):
     with get_db() as db:

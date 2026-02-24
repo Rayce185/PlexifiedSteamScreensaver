@@ -673,7 +673,7 @@ function renderTypeChips(){
     const on=filters.type.includes(t);
     const label=TYPE_LABELS[t]||t;
     const count=ALL.filter(g=>(g.type||'game')===t).length;
-    return '<span class="chip'+(on?' active':'')+'" onclick="toggleTypeChip(''+t+'')" title="'+count+' items">'+label+' <span class="chip-count">'+count+'</span></span>';
+    return '<span class="chip'+(on?' active':'')+'" onclick="toggleTypeChip(\x27'+t+'\x27)" title="'+count+' items">'+label+' <span class="chip-count">'+count+'</span></span>';
   }).join('');
 }
 

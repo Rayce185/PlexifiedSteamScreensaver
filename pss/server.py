@@ -12,8 +12,10 @@ import uvicorn
 
 from pss.database import (
     init_db, get_active_account, upsert_account, get_games, upsert_games,
-    upsert_enrichment, upsert_steamspy, get_unenriched_appids,
-    get_steamspy_unenriched_appids, get_enrichment_count,
+    upsert_enrichment, upsert_steamspy, upsert_deck_protondb,
+    get_unenriched_appids, get_steamspy_unenriched_appids,
+    get_deck_unenriched_appids, get_all_enriched_appids,
+    get_enrichment_count, bulk_update_app_types,
     get_exclusions, set_exclusions, toggle_exclusion, bulk_set_exclusions,
     get_full_config, get_config, set_config, set_display_elements,
     get_presets, save_preset, delete_preset, get_distinct_values,
@@ -41,20 +43,32 @@ enrichment_state = {
     "total": 0, "completed": 0, "errors": 0, "skipped": 0,
     "current_game": "", "current_appid": 0,
     "started_at": None, "eta_seconds": 0,
-    "phase": "idle", "message": "", "rate_delay": 1.5
+    "phase": "idle", "message": "", "rate_delay": 1.5,
+    "error_details": []
 }
 enrichment_lock = threading.Lock()
 enrichment_thread = None
 
 steamspy_state = {
     "running": False, "stop_requested": False,
-    "total": 0, "completed": 0, "errors": 0,
+    "total": 0, "completed": 0, "errors": 0, "skipped": 0,
     "current_game": "", "current_appid": 0,
     "started_at": None, "eta_seconds": 0,
     "phase": "idle", "message": ""
 }
 steamspy_lock = threading.Lock()
 steamspy_thread = None
+
+deck_state = {
+    "running": False, "stop_requested": False,
+    "total": 0, "completed": 0, "errors": 0, "skipped": 0,
+    "current_game": "", "current_appid": 0,
+    "started_at": None, "eta_seconds": 0,
+    "phase": "idle", "message": "",
+    "types_corrected": 0
+}
+deck_lock = threading.Lock()
+deck_thread = None
 
 
 def fetch_steamspy_data(appid):
@@ -101,15 +115,16 @@ def steamspy_worker():
             upsert_steamspy(appid, result)
         else:
             with steamspy_lock:
-                steamspy_state["errors"] += 1
+                steamspy_state["skipped"] += 1
         # SteamSpy allows ~4 req/sec, use 0.3s to be safe
         time.sleep(0.3)
         if (i + 1) % 100 == 0:
             log.info(f"SteamSpy checkpoint: {i+1}/{len(to_enrich)}")
     with steamspy_lock:
         steamspy_state.update(completed=len(to_enrich), phase="complete", running=False,
-            message=f"Done! {len(to_enrich)} games processed, {steamspy_state['errors']} errors")
-    log.info(f"SteamSpy enrichment complete: {len(to_enrich)} processed, {steamspy_state['errors']} errors")
+            message=f"Done! {len(to_enrich)} processed, {steamspy_state['skipped']} skipped")
+    log.info(f"SteamSpy enrichment complete: {len(to_enrich)} processed, "
+             f"{steamspy_state['skipped']} skipped, {steamspy_state['errors']} errors")
 
 
 def fetch_steam_library(api_key, steamid):
@@ -301,9 +316,13 @@ def fetch_app_details(appid):
             "enriched_at": datetime.utcnow().isoformat()
         }
     except urllib.error.HTTPError as e:
-        return "RATE_LIMITED" if e.code == 429 else None
+        if e.code == 429: return "RATE_LIMITED"
+        if e.code in (404, 403): return None  # delisted/blocked = skip
+        return "ERROR"  # real server error
+    except urllib.error.URLError:
+        return "ERROR"  # network error
     except Exception:
-        return None
+        return None  # parse error = probably no store page
 
 
 def enrichment_worker():
@@ -316,7 +335,7 @@ def enrichment_worker():
     to_enrich = get_unenriched_appids(account["steamid64"])
     already_done = get_enrichment_count()
     with enrichment_lock:
-        enrichment_state.update(total=len(to_enrich), completed=0, errors=0, skipped=already_done,
+        enrichment_state.update(total=len(to_enrich), completed=0, errors=0, skipped=0, error_details=[],
             phase="running", message=f"Enriching {len(to_enrich)} games ({already_done} already done)",
             started_at=time.time())
     log.info(f"Enrichment starting: {len(to_enrich)} to process, {already_done} cached")
@@ -345,7 +364,14 @@ def enrichment_worker():
             upsert_enrichment(appid, result)
             consecutive_errors = 0
         elif result is None:
-            with enrichment_lock: enrichment_state["errors"] += 1
+            # 404/no store page = skipped (delisted/removed), not an error
+            with enrichment_lock: enrichment_state["skipped"] += 1
+            consecutive_errors = 0  # skips are expected, don't count toward pause
+        elif result == "ERROR":
+            with enrichment_lock:
+                enrichment_state["errors"] += 1
+                if len(enrichment_state["error_details"]) < 50:
+                    enrichment_state["error_details"].append(f"{appid} ({name})")
             consecutive_errors += 1
             if consecutive_errors >= 10:
                 with enrichment_lock:
@@ -357,8 +383,176 @@ def enrichment_worker():
     with enrichment_lock:
         total = get_enrichment_count()
         enrichment_state.update(completed=len(to_enrich), phase="complete", running=False,
-            message=f"Done! {total} games enriched, {enrichment_state['errors']} errors")
-    log.info(f"Enrichment complete: {total} total, {enrichment_state['errors']} errors")
+            message=f"Done! {total} enriched, {enrichment_state['skipped']} skipped, {enrichment_state['errors']} errors")
+    log.info(f"Enrichment complete: {total} total, {enrichment_state['skipped']} skipped, {enrichment_state['errors']} errors")
+
+
+
+def fetch_deck_compatibility(appid):
+    """Fetch Steam Deck compatibility rating for an app."""
+    url = f"https://store.steampowered.com/saleaction/ajaxgetdeckappcompatibilityreport?nAppID={appid}"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "PSS/0.2"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+        if not data.get("success"):
+            return None
+        results = data.get("results", {})
+        category = results.get("resolved_category", 0)  # 0=Unknown, 1=Unsupported, 2=Playable, 3=Verified
+        # Check loc_tokens for type hints
+        type_hint = None
+        for item in results.get("resolved_items", []) + results.get("steamos_resolved_items", []):
+            tok = item.get("loc_token", "")
+            if "_Software" in tok:
+                type_hint = "software"
+            elif "_Tool" in tok:
+                type_hint = "tool"
+        return {"deck_verified": category, "type_hint": type_hint}
+    except Exception:
+        return None
+
+
+def fetch_protondb_tier(appid):
+    """Fetch ProtonDB community compatibility tier."""
+    url = f"https://www.protondb.com/api/v1/reports/summaries/{appid}.json"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "PSS/0.2"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+        return {
+            "protondb_tier": data.get("tier"),
+            "protondb_confidence": data.get("confidence"),
+            "protondb_total": data.get("total", 0)
+        }
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return {"protondb_tier": "pending", "protondb_confidence": None, "protondb_total": 0}
+        return None
+    except Exception:
+        return None
+
+
+def fetch_type_catalog():
+    """Download Steam app catalog from IStoreService/GetAppList for type correction.
+    Returns dict of {appid: app_type}."""
+    if not STEAM_API_KEY:
+        log.warning("No Steam API key for IStoreService type lookup")
+        return {}
+    type_map = {}
+    last_appid = 0
+    page = 0
+    while True:
+        url = (f"https://api.steampowered.com/IStoreService/GetAppList/v1/"
+               f"?key={STEAM_API_KEY}&max_results=50000&last_appid={last_appid}")
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "PSS/0.2"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = json.loads(resp.read().decode())
+            apps = data.get("response", {}).get("apps", [])
+            if not apps:
+                break
+            for app in apps:
+                aid = app.get("appid")
+                atype = app.get("type", "").lower()
+                # IStoreService uses: game, dlc, music, application, tool, demo, episode, hardware
+                # Normalize to our types
+                if atype in ("game", "dlc", "music", "demo"):
+                    type_map[aid] = atype
+                elif atype == "application":
+                    type_map[aid] = "software"
+                elif atype in ("tool", "config"):
+                    type_map[aid] = "tool"
+                elif atype:
+                    type_map[aid] = atype
+            last_appid = apps[-1]["appid"]
+            page += 1
+            log.info(f"IStoreService catalog page {page}: {len(apps)} apps (total {len(type_map)})")
+            if len(apps) < 50000:
+                break
+        except Exception as e:
+            log.error(f"IStoreService catalog fetch failed on page {page}: {e}")
+            break
+    return type_map
+
+
+def deck_worker():
+    """Combined worker: IStoreService type correction + Deck compatibility + ProtonDB."""
+    global deck_state
+    account = get_active_account()
+    if not account:
+        with deck_lock:
+            deck_state.update(phase="error", message="No active account", running=False)
+        return
+
+    # Phase 1: Type correction from IStoreService catalog
+    with deck_lock:
+        deck_state.update(phase="types", message="Downloading Steam catalog for type correction...")
+    log.info("Deck enrichment Phase 1: fetching IStoreService catalog for type correction")
+    catalog = fetch_type_catalog()
+    if catalog:
+        owned_appids = get_all_enriched_appids(account["steamid64"])
+        relevant = {aid: t for aid, t in catalog.items() if aid in owned_appids}
+        corrected = bulk_update_app_types(relevant)
+        with deck_lock:
+            deck_state["types_corrected"] = corrected
+        log.info(f"Type correction: {corrected} apps reclassified from {len(relevant)} matches")
+    else:
+        log.warning("Type correction skipped — catalog download failed or no API key")
+
+    # Phase 2: Deck + ProtonDB per-app enrichment
+    to_enrich = get_deck_unenriched_appids(account["steamid64"])
+    with deck_lock:
+        deck_state.update(total=len(to_enrich), completed=0, errors=0, skipped=0,
+            phase="running", message=f"Fetching Deck/ProtonDB data for {len(to_enrich)} games",
+            started_at=time.time())
+    log.info(f"Deck enrichment Phase 2: {len(to_enrich)} apps to process")
+
+    for i, (appid, name) in enumerate(to_enrich):
+        if deck_state["stop_requested"]:
+            with deck_lock:
+                deck_state.update(phase="stopped", message=f"Stopped at {i}/{len(to_enrich)}", running=False)
+            return
+        with deck_lock:
+            deck_state["current_game"] = name
+            deck_state["current_appid"] = appid
+            deck_state["completed"] = i
+            elapsed = time.time() - deck_state["started_at"]
+            if i > 0:
+                deck_state["eta_seconds"] = int((len(to_enrich) - i) * (elapsed / i))
+
+        # Fetch both
+        deck_data = fetch_deck_compatibility(appid)
+        proton_data = fetch_protondb_tier(appid)
+
+        if deck_data is None and proton_data is None:
+            with deck_lock:
+                deck_state["skipped"] += 1
+        else:
+            merged = {
+                "deck_verified": (deck_data or {}).get("deck_verified", 0),
+                "deck_enriched_at": datetime.utcnow().isoformat(),
+                "protondb_tier": (proton_data or {}).get("protondb_tier"),
+                "protondb_confidence": (proton_data or {}).get("protondb_confidence"),
+                "protondb_total": (proton_data or {}).get("protondb_total", 0),
+            }
+            upsert_deck_protondb(appid, merged)
+            # Type hint from Deck endpoint (software/tool detection)
+            type_hint = (deck_data or {}).get("type_hint")
+            if type_hint:
+                from pss.database import update_app_type
+                update_app_type(appid, type_hint)
+
+        # Rate limit: ~0.4s per app (2 calls with 0.2s each)
+        time.sleep(0.25)
+        if (i + 1) % 100 == 0:
+            log.info(f"Deck enrichment checkpoint: {i+1}/{len(to_enrich)}")
+
+    with deck_lock:
+        deck_state.update(completed=len(to_enrich), phase="complete", running=False,
+            message=f"Done! {len(to_enrich)} processed, {deck_state['skipped']} skipped, "
+                    f"{deck_state['types_corrected']} types corrected")
+    log.info(f"Deck enrichment complete: {len(to_enrich)} processed, "
+             f"{deck_state['skipped']} skipped, {deck_state['types_corrected']} types corrected")
 
 
 @asynccontextmanager
@@ -625,6 +819,33 @@ async def api_steamspy_stop():
     if not steamspy_state["running"]: return JSONResponse({"error": "Not running"}, status_code=409)
     with steamspy_lock:
         steamspy_state.update(stop_requested=True, message="Stopping...")
+    return JSONResponse({"ok": True, "message": "Stop requested"})
+
+
+
+# === DECK/PROTONDB ENRICHMENT API ===
+
+@app.post("/api/deck/start")
+async def api_deck_start():
+    global deck_thread
+    if deck_state["running"]: return JSONResponse({"error": "Already running"}, status_code=409)
+    with deck_lock:
+        deck_state.update(running=True, stop_requested=False, phase="starting",
+                          message="Starting Deck/ProtonDB enrichment...", errors=0, skipped=0,
+                          types_corrected=0)
+    deck_thread = threading.Thread(target=deck_worker, daemon=True)
+    deck_thread.start()
+    return JSONResponse({"ok": True, "message": "Deck/ProtonDB enrichment started"})
+
+@app.get("/api/deck/status")
+async def api_deck_status():
+    with deck_lock: return JSONResponse(dict(deck_state))
+
+@app.post("/api/deck/stop")
+async def api_deck_stop():
+    if not deck_state["running"]: return JSONResponse({"error": "Not running"}, status_code=409)
+    with deck_lock:
+        deck_state.update(stop_requested=True, message="Stopping...")
     return JSONResponse({"ok": True, "message": "Stop requested"})
 
 

@@ -29,6 +29,14 @@
   .badge-meta { background: rgba(255,193,7,0.2); color: rgba(255,193,7,0.95); border: 1px solid rgba(255,193,7,0.3); font-weight: 600; }
   .badge-vr { background: rgba(156,39,176,0.25); color: rgba(206,147,216,0.95); border: 1px solid rgba(156,39,176,0.3); }
   .badge-dim { background: rgba(128,128,128,0.15); color: rgba(180,180,180,0.5); border: 1px solid rgba(128,128,128,0.15); }
+  .badge-deck-v { background: rgba(76,175,80,0.25); color: rgba(129,199,132,0.95); border: 1px solid rgba(76,175,80,0.3); }
+  .badge-deck-p { background: rgba(255,193,7,0.25); color: rgba(255,213,79,0.95); border: 1px solid rgba(255,193,7,0.3); }
+  .badge-deck-u { background: rgba(244,67,54,0.25); color: rgba(229,115,115,0.95); border: 1px solid rgba(244,67,54,0.3); }
+  .badge-pdb-platinum { background: rgba(224,224,224,0.2); color: rgba(224,224,224,0.95); border: 1px solid rgba(224,224,224,0.25); }
+  .badge-pdb-gold { background: rgba(255,215,0,0.2); color: rgba(255,213,79,0.95); border: 1px solid rgba(255,215,0,0.25); }
+  .badge-pdb-silver { background: rgba(192,192,192,0.2); color: rgba(189,189,189,0.95); border: 1px solid rgba(192,192,192,0.25); }
+  .badge-pdb-bronze { background: rgba(205,127,50,0.2); color: rgba(212,167,106,0.95); border: 1px solid rgba(205,127,50,0.25); }
+  .badge-pdb-borked { background: rgba(244,67,54,0.2); color: rgba(229,115,115,0.95); border: 1px solid rgba(244,67,54,0.25); }
   .badge-controller { background: rgba(0,150,136,0.2); color: rgba(128,203,196,0.95); border: 1px solid rgba(0,150,136,0.3); }
   .meta-text { color: rgba(255,255,255,0.55); font-size: 0.9rem; font-weight: 300; text-shadow: 0 1px 8px rgba(0,0,0,0.7); }
   .meta-dim { color: rgba(255,255,255,0.35); font-size: 0.82rem; font-weight: 300; font-style: italic; }
@@ -135,6 +143,20 @@
       if(p.linux) parts.push('Linux');
       if(p.mac) parts.push('Mac');
       if(parts.length>0){ addDiv(m); m.appendChild(metaDim(parts.join(' / '))); }
+    },
+    deck_verified(g,m) {
+      const d=g.deck_verified||0;
+      const labels={3:'\u2705 Deck Verified',2:'\u26A0\uFE0F Deck Playable',1:'\u274C Deck Unsupported',0:'\u2753 Deck Untested'};
+      const cls={3:'badge-deck-v',2:'badge-deck-p',1:'badge-deck-u',0:'badge-dim'};
+      addDiv(m); m.appendChild(badge(cls[d]||'badge-dim',labels[d]||'Deck Unknown'));
+    },
+    protondb(g,m) {
+      if(!g.protondb_tier||g.protondb_tier==='pending') return;
+      const tier=g.protondb_tier;
+      const icons={platinum:'\uD83C\uDFC6',gold:'\uD83E\uDD47',silver:'\uD83E\uDD48',bronze:'\uD83E\uDD49',borked:'\uD83D\uDC80'};
+      const cls={platinum:'badge-pdb-platinum',gold:'badge-pdb-gold',silver:'badge-pdb-silver',bronze:'badge-pdb-bronze',borked:'badge-pdb-borked'};
+      const label=(icons[tier]||'')+' '+(tier.charAt(0).toUpperCase()+tier.slice(1));
+      addDiv(m); m.appendChild(badge(cls[tier]||'badge-dim',label));
     }
   };
 

@@ -6,7 +6,7 @@ from datetime import datetime
 from contextlib import contextmanager
 
 DB_PATH = None
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -35,7 +35,12 @@ CREATE TABLE IF NOT EXISTS enrichment (
     enriched_at TEXT, permanently_unenrichable INTEGER DEFAULT 0,
     steamspy_owners TEXT, steamspy_avg_playtime INTEGER,
     steamspy_positive INTEGER, steamspy_negative INTEGER,
-    steamspy_enriched_at TEXT
+    steamspy_enriched_at TEXT,
+    deck_verified INTEGER DEFAULT 0,
+    deck_enriched_at TEXT,
+    protondb_tier TEXT,
+    protondb_confidence TEXT,
+    protondb_total INTEGER DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS exclusions (
     account_id TEXT NOT NULL, appid INTEGER NOT NULL, reason TEXT DEFAULT 'manual',
@@ -107,6 +112,8 @@ def init_db(db_path):
             _migrate_to_v2(db)
         if old_version < 3:
             _migrate_to_v3(db)
+        if old_version < 4:
+            _migrate_to_v4(db)
         db.execute("INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)",
                     ("schema_version", str(SCHEMA_VERSION)))
 
@@ -158,6 +165,20 @@ def _migrate_to_v3(db):
             db.execute("INSERT INTO config (scope, key, value) VALUES ('global', ?, ?)",
                        (key, json.dumps(value)))
 
+def _migrate_to_v4(db):
+    """Migration v3 to v4: add Deck/ProtonDB columns, display elements."""
+    existing = [r[1] for r in db.execute("PRAGMA table_info(enrichment)").fetchall()]
+    for col, coltype in [
+        ("deck_verified", "INTEGER DEFAULT 0"),
+        ("deck_enriched_at", "TEXT"),
+        ("protondb_tier", "TEXT"),
+        ("protondb_confidence", "TEXT"),
+        ("protondb_total", "INTEGER DEFAULT 0"),
+    ]:
+        if col not in existing:
+            db.execute(f"ALTER TABLE enrichment ADD COLUMN {col} {coltype}")
+
+
 def _seed_builtin_presets(db, account_id):
     for bp in BUILTIN_PRESETS:
         existing = db.execute("SELECT 1 FROM presets WHERE account_id=? AND name=?",
@@ -181,6 +202,8 @@ DEFAULT_DISPLAY_ELEMENTS = [
     {"id": "controller_support", "enabled": True, "order": 9},
     {"id": "vr_support", "enabled": True, "order": 10},
     {"id": "platforms", "enabled": True, "order": 11},
+    {"id": "deck_verified", "enabled": False, "order": 12},
+    {"id": "protondb", "enabled": False, "order": 13},
 ]
 
 @contextmanager
@@ -225,6 +248,7 @@ def get_games(account_id):
                    e.screenshots, e.is_free, e.enriched_at,
                    e.steamspy_owners, e.steamspy_avg_playtime,
                    e.steamspy_positive, e.steamspy_negative,
+                   e.deck_verified, e.protondb_tier, e.protondb_confidence, e.protondb_total,
                    CASE WHEN e.appid IS NOT NULL THEN 1 ELSE 0 END AS enriched,
                    CASE WHEN x.appid IS NOT NULL THEN 1 ELSE 0 END AS excluded
             FROM games g
@@ -252,6 +276,10 @@ def get_games(account_id):
             except: g["native_platforms"] = None
         if g["enriched"]:
             g["vr_support"] = bool(g.get("vr_support"))
+            g["deck_verified"] = g.get("deck_verified", 0) or 0
+            g["protondb_tier"] = g.get("protondb_tier")
+            g["protondb_confidence"] = g.get("protondb_confidence")
+            g["protondb_total"] = g.get("protondb_total", 0) or 0
             g["coming_soon"] = bool(g.get("coming_soon"))
             g["is_free"] = bool(g.get("is_free"))
         # Default type for unenriched games
@@ -349,6 +377,62 @@ def get_steamspy_unenriched_appids(account_id):
             ORDER BY g.name COLLATE NOCASE
         """, (account_id,)).fetchall()
         return [(r["appid"], r["name"]) for r in rows]
+
+def upsert_deck_protondb(appid, data):
+    """Update Deck verified status and ProtonDB tier for an app."""
+    with get_db() as db:
+        db.execute("""
+            UPDATE enrichment SET
+                deck_verified = ?, deck_enriched_at = ?,
+                protondb_tier = ?, protondb_confidence = ?,
+                protondb_total = ?
+            WHERE appid = ?
+        """, (
+            data.get("deck_verified", 0), data.get("deck_enriched_at"),
+            data.get("protondb_tier"), data.get("protondb_confidence"),
+            data.get("protondb_total", 0), appid
+        ))
+
+
+def update_app_type(appid, app_type):
+    """Update the type of an app in the enrichment table."""
+    with get_db() as db:
+        db.execute("UPDATE enrichment SET type = ? WHERE appid = ?", (app_type, appid))
+
+
+def bulk_update_app_types(type_map):
+    """Bulk update app types from a {appid: type} dict. Only updates enriched apps."""
+    with get_db() as db:
+        updated = 0
+        for appid, app_type in type_map.items():
+            r = db.execute("UPDATE enrichment SET type = ? WHERE appid = ? AND type != ?",
+                           (app_type, appid, app_type))
+            updated += r.rowcount
+        return updated
+
+
+def get_deck_unenriched_appids(account_id):
+    """Get appids that have store enrichment but no Deck/ProtonDB data."""
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT g.appid, g.name FROM games g
+            INNER JOIN enrichment e ON g.appid = e.appid
+            WHERE g.account_id = ? AND e.deck_enriched_at IS NULL
+            ORDER BY g.name COLLATE NOCASE
+        """, (account_id,)).fetchall()
+        return [(r["appid"], r["name"]) for r in rows]
+
+
+def get_all_enriched_appids(account_id):
+    """Get all appids that have enrichment entries (for type correction matching)."""
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT g.appid FROM games g
+            INNER JOIN enrichment e ON g.appid = e.appid
+            WHERE g.account_id = ?
+        """, (account_id,)).fetchall()
+        return set(r["appid"] for r in rows)
+
 
 def get_unenriched_appids(account_id):
     with get_db() as db:

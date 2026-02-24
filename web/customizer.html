@@ -129,6 +129,16 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .gc .m-inst{background:rgba(63,185,80,.12);color:var(--green)}
 .gc .m-nsfw{background:rgba(248,81,73,.12);color:var(--red)}
 .gc .m-sw{background:rgba(210,153,34,.12);color:var(--orange)}
+.gc .m-deck-v{background:rgba(76,175,80,.15);color:#81c784}
+.gc .m-deck-p{background:rgba(255,193,7,.15);color:#ffd54f}
+.gc .m-deck-u{background:rgba(244,67,54,.15);color:#e57373}
+.gc .m-deck-x{background:rgba(128,128,128,.1);color:rgba(180,180,180,.5)}
+.gc .m-pdb{font-size:.64rem}
+.gc .m-pdb-platinum{background:rgba(224,224,224,.12);color:#e0e0e0}
+.gc .m-pdb-gold{background:rgba(255,215,0,.12);color:#ffd54f}
+.gc .m-pdb-silver{background:rgba(192,192,192,.12);color:#bdbdbd}
+.gc .m-pdb-bronze{background:rgba(205,127,50,.12);color:#d4a76a}
+.gc .m-pdb-borked{background:rgba(244,67,54,.12);color:#e57373}
 .gc .m-excl{background:rgba(248,81,73,.08);color:var(--red);border:1px solid rgba(248,81,73,.15)}
 .gc .m-genre{background:rgba(88,166,255,.08);color:var(--accent)}
 .gc .m-ctrl{background:rgba(0,150,136,.12);color:#80cbc4}
@@ -325,6 +335,16 @@ input[type=file]{display:none}
 
 <!-- SETTINGS TAB -->
 <div class="tab-content" id="tab-settings">
+  <div class="settings-nav" id="settings-nav">
+    <a href="#sec-timing" onclick="settingsJump(event,'sec-timing')">Timing</a>
+    <a href="#sec-animation" onclick="settingsJump(event,'sec-animation')">Animation</a>
+    <a href="#sec-sstypes" onclick="settingsJump(event,'sec-sstypes')">Types</a>
+    <a href="#sec-enrichment" onclick="settingsJump(event,'sec-enrichment')">Enrichment</a>
+    <a href="#sec-steamspy" onclick="settingsJump(event,'sec-steamspy')">SteamSpy</a>
+    <a href="#sec-deck" onclick="settingsJump(event,'sec-deck')">Deck</a>
+    <a href="#sec-shovelware" onclick="settingsJump(event,'sec-shovelware')">Shovelware</a>
+    <a href="#sec-data" onclick="settingsJump(event,'sec-data')">Data</a>
+  </div>
   <div class="settings-tab">
     <div class="section-title" id="sec-timing">&#9201; Timing</div>
     <div class="setting-row"><div><div class="setting-label">Idle activation</div><div class="setting-desc">Mute + screensaver after this idle time</div></div><div class="setting-input"><input type="number" id="s-idle" min="30" max="600" step="10"><span class="setting-unit">sec</span></div></div>
@@ -355,8 +375,8 @@ input[type=file]{display:none}
         <div>Progress: <span id="ed-count">0/0</span></div>
         <div>Current: <span id="ed-current">-</span></div>
         <div>ETA: <span id="ed-eta">-</span></div>
-        <div>Errors: <span id="ed-errors">0</span></div>
-        <div>Cached: <span id="ed-skipped">0</span></div>
+        <div>Skipped: <span id="ed-skipped">0</span> <span style="color:var(--text-faint);font-size:.7rem">(delisted/no page)</span></div>
+        <div>Errors: <span id="ed-errors">0</span> <span style="color:var(--text-faint);font-size:.7rem">(server/network)</span></div>
       </div>
     </div>
 
@@ -375,7 +395,47 @@ input[type=file]{display:none}
         <div>Progress: <span id="sspy-count">0/0</span></div>
         <div>Current: <span id="sspy-current">-</span></div>
         <div>ETA: <span id="sspy-eta">-</span></div>
-        <div>Errors: <span id="sspy-errors">0</span></div>
+        <div>Skipped: <span id="sspy-skipped">0</span> <span style="color:var(--text-faint);font-size:.7rem">(no data available)</span></div>
+      </div>
+    </div>
+
+    <div class="section-title" id="sec-deck" style="margin-top:28px">&#127918; Deck &amp; ProtonDB Enrichment</div>
+    <div class="enrich-panel">
+      <div class="enrich-header">
+        <div><strong>Fetch Steam Deck compatibility + ProtonDB tiers + correct app types</strong><div class="setting-desc">Phase 1: Downloads Steam catalog for proper type classification (game/software/tool/dlc). Phase 2: Fetches Deck Verified rating + ProtonDB community tier per game. ~7 min for 1000 games. Requires Store enrichment first.</div></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-accent" id="deck-start-btn" onclick="startDeck()">&#127918; Start</button>
+          <button class="btn" id="deck-stop-btn" onclick="stopDeck()" style="display:none">&#9632; Stop</button>
+        </div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="deck-progress"></div></div>
+      <div id="deck-msg" class="enrich-status"></div>
+      <div class="enrich-details" id="deck-details" style="display:none">
+        <div>Progress: <span id="deck-count">0/0</span></div>
+        <div>Current: <span id="deck-current">-</span></div>
+        <div>ETA: <span id="deck-eta">-</span></div>
+        <div>Skipped: <span id="deck-skipped">0</span></div>
+        <div>Types corrected: <span id="deck-types">0</span></div>
+      </div>
+    </div>
+
+    <div class="section-title" id="sec-deck" style="margin-top:28px">&#127918; Deck &amp; ProtonDB Enrichment</div>
+    <div class="enrich-panel">
+      <div class="enrich-header">
+        <div><strong>Deck compatibility + ProtonDB tiers + type correction</strong><div class="setting-desc">Phase 1: Downloads Steam catalog for proper type classification (game/software/tool/dlc). Phase 2: Fetches Deck Verified status + ProtonDB community tier per game. ~7 min for 1000 games. Requires Store enrichment first.</div></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-accent" id="deck-start-btn" onclick="startDeck()">&#127918; Start</button>
+          <button class="btn" id="deck-stop-btn" onclick="stopDeck()" style="display:none">&#9632; Stop</button>
+        </div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="deck-progress"></div></div>
+      <div id="deck-msg" class="enrich-status"></div>
+      <div class="enrich-details" id="deck-details" style="display:none">
+        <div>Progress: <span id="deck-count">0/0</span></div>
+        <div>Current: <span id="deck-current">-</span></div>
+        <div>ETA: <span id="deck-eta">-</span></div>
+        <div>Skipped: <span id="deck-skipped">0</span></div>
+        <div>Types corrected: <span id="deck-types">0</span></div>
       </div>
     </div>
 
@@ -524,7 +584,7 @@ async function init(){
     buildSortMenu(); buildFilterPanel(); renderPresets(); renderTypeChips();
     // Load default preset
     loadPresetByName('All Games');
-    applyView(); updateStats(); loadSettings(); renderDisplay(); pollEnrichment(); pollSteamSpy(); renderSSTypes(); initSettingsScrollSpy();
+    applyView(); updateStats(); loadSettings(); renderDisplay(); pollEnrichment(); pollSteamSpy(); pollDeck(); pollDeck(); renderSSTypes(); initSettingsScrollSpy();
   }catch(e){console.error('Init failed',e)}
 }
 
@@ -553,6 +613,10 @@ function getFiltered(){
     if(filters.enriched==='yes' && !g.enriched) return false;
     if(filters.enriched==='no' && g.enriched) return false;
     // Shovelware
+    // Deck filter
+    if(filters.deck&&Array.isArray(filters.deck)&&filters.deck.length>0){
+      if(!filters.deck.includes(g.deck_verified||0)) return false;
+    }
     if(filters.shovelware==='hide' && isShovelware(g)) return false;
     if(filters.shovelware==='only' && !isShovelware(g)) return false;
     // Playtime range
@@ -745,6 +809,29 @@ function updateStats(){
   document.getElementById('st-included').textContent=inc.length;
   document.getElementById('st-excluded').textContent=exc.length;
   document.getElementById('st-enriched').textContent=enriched.length+'/'+ALL.length;
+  // Deck filter chips
+  const DECK_LABELS={3:'\u2705 Verified',2:'\u26A0\uFE0F Playable',1:'\u274C Unsupported',0:'\u2753 Untested'};
+  const DECK_CLASSES={3:'m-deck-v',2:'m-deck-p',1:'m-deck-u',0:'m-deck-x'};
+  const deckCounts={};
+  ALL.forEach(g=>{const d=g.deck_verified||0;deckCounts[d]=(deckCounts[d]||0)+1});
+  const hasAnyDeck=Object.keys(deckCounts).some(k=>k!=='0'&&deckCounts[k]>0);
+  const oldDc=document.getElementById('deck-chips');if(oldDc)oldDc.remove();
+  if(hasAnyDeck){
+    const dc=document.createElement('span');dc.id='deck-chips';dc.style.cssText='display:inline-flex;gap:3px;margin-left:6px';
+    [3,2,1,0].forEach(d=>{
+      if(!deckCounts[d]) return;
+      const c=document.createElement('span');
+      c.className='micro '+(DECK_CLASSES[d]||'');
+      c.style.cssText='cursor:pointer;font-size:.66rem;padding:2px 6px';
+      const active=!filters.deck||(Array.isArray(filters.deck)&&filters.deck.includes(d));
+      if(!active) c.style.opacity='0.3';
+      c.textContent=(DECK_LABELS[d]||'?')+' '+deckCounts[d];
+      c.onclick=function(){toggleDeckFilter(d)};
+      dc.appendChild(c);
+    });
+    cont.parentElement.appendChild(dc);
+  }
+
   const sw=ALL.filter(g=>isShovelware(g));
   document.getElementById('st-shovelware').textContent=sw.length;
 }
@@ -1061,6 +1148,12 @@ window.showPreview=function(appid){
   if(g.primary_device) details+='<dt>Primary Device</dt><dd>'+g.primary_device+'</dd>';
   details+='<dt>Controller</dt><dd>'+(g.controller_support==='full'?'Full support':g.controller_support==='partial'?'Partial':'None')+'</dd>';
   details+='<dt>VR</dt><dd>'+(g.vr_support?'Supported':'No')+'</dd>';
+  const _deckL={3:'\u2705 Verified',2:'\u26A0\uFE0F Playable',1:'\u274C Unsupported',0:'Unknown'};
+  details+='<dt>Steam Deck</dt><dd>'+(_deckL[g.deck_verified||0])+'</dd>';
+  if(g.protondb_tier) details+='<dt>ProtonDB</dt><dd style="text-transform:capitalize">'+g.protondb_tier+(g.protondb_total?' ('+g.protondb_total+' reports)':'')+'</dd>';
+  const deckLabels={3:'\u2705 Verified',2:'\u26A0\uFE0F Playable',1:'\u274C Unsupported',0:'Unknown'};
+  details+='<dt>Steam Deck</dt><dd>'+(deckLabels[g.deck_verified||0])+'</dd>';
+  if(g.protondb_tier) details+='<dt>ProtonDB</dt><dd style="text-transform:capitalize">'+g.protondb_tier+(g.protondb_total?' ('+g.protondb_total+' reports)':'')+'</dd>';
   if(g.native_platforms){
     const pp=[];
     if(g.native_platforms.windows) pp.push('Windows');
@@ -1099,6 +1192,10 @@ const ELEMENTS=[
   {id:'description',icon:'\uD83D\uDCDD',name:'Short Description',desc:'One-liner from the store page',example:'An open-world action adventure...',cat:'enriched'},
   {id:'controller',icon:'\uD83C\uDFAE',name:'Controller Support',desc:'Full or partial controller',example:'\uD83C\uDFAE Full Controller',cat:'enriched'},
   {id:'vr_support',icon:'\uD83E\uDD7D',name:'VR Support',desc:'VR headset support badge',example:'\uD83E\uDD7D VR Supported',cat:'enriched'},
+  {id:'deck_verified',icon:'\uD83C\uDFAE',name:'Steam Deck',desc:'Official Deck compatibility rating',example:'\u2705 Verified',cat:'enriched'},
+  {id:'protondb',icon:'\uD83C\uDFC6',name:'ProtonDB',desc:'Community Linux/Proton compatibility',example:'\uD83C\uDFC6 Platinum',cat:'enriched'},
+  {id:'deck_verified',icon:'\uD83C\uDFAE',name:'Steam Deck',desc:'Valve\'s official Deck compatibility rating',example:'\u2705 Verified / \u26A0 Playable',cat:'enriched'},
+  {id:'protondb',icon:'\uD83C\uDFC6',name:'ProtonDB',desc:'Community Linux/Proton compatibility tier',example:'\uD83C\uDFC6 Platinum',cat:'enriched'},
   {id:'platforms',icon:'\uD83D\uDDA5',name:'Native Platforms',desc:'Which platforms run natively',example:'Win / Linux / Mac',cat:'enriched'}
 ];
 
@@ -1240,7 +1337,7 @@ async function pollSteamSpy(){
       document.getElementById('sspy-count').textContent=s.completed+'/'+s.total;
       document.getElementById('sspy-current').textContent=s.current_game||'-';
       document.getElementById('sspy-eta').textContent=s.eta_seconds>0?fmtTime(s.eta_seconds):'-';
-      document.getElementById('sspy-errors').textContent=s.errors;
+      document.getElementById('sspy-skipped').textContent=s.skipped||0;
       startSspyPoll();
     }else{
       startBtn.style.display='';stopBtn.style.display='none';
@@ -1257,6 +1354,107 @@ async function pollSteamSpy(){
   }catch(e){}
 }
 
+// === DECK ENRICHMENT ===
+let deckPoll=null;
+window.startDeck=async function(){
+  try{const r=await fetch('/api/deck/start',{method:'POST'});const d=await r.json();
+    if(d.ok){toast('Deck/ProtonDB enrichment started');startDeckPoll()}else toast(d.error||'Failed')
+  }catch(e){toast('Failed')}
+};
+window.stopDeck=async function(){
+  try{await fetch('/api/deck/stop',{method:'POST'});toast('Stopping...')}catch(e){}
+};
+function startDeckPoll(){if(deckPoll)return;deckPoll=setInterval(pollDeck,2000)}
+function stopDeckPoll(){if(deckPoll){clearInterval(deckPoll);deckPoll=null}}
+async function pollDeck(){
+  try{
+    const r=await fetch('/api/deck/status');const s=await r.json();
+    const bar=document.getElementById('deck-progress');
+    const msg=document.getElementById('deck-msg');
+    const det=document.getElementById('deck-details');
+    const startBtn=document.getElementById('deck-start-btn');
+    const stopBtn=document.getElementById('deck-stop-btn');
+    if(s.running||s.phase==='running'||s.phase==='starting'||s.phase==='types'){
+      startBtn.style.display='none';stopBtn.style.display='';det.style.display='flex';
+      const pct=s.total>0?((s.completed/s.total)*100):0;
+      bar.style.width=(s.phase==='types'?'0':pct)+'%';bar.className='progress-fill';
+      document.getElementById('deck-count').textContent=s.completed+'/'+s.total;
+      document.getElementById('deck-current').textContent=s.phase==='types'?'Downloading Steam catalog...':s.current_game||'-';
+      document.getElementById('deck-eta').textContent=s.eta_seconds>0?fmtTime(s.eta_seconds):(s.phase==='types'?'~5s':'-');
+      document.getElementById('deck-skipped').textContent=s.skipped||0;
+      document.getElementById('deck-types').textContent=s.types_corrected||0;
+      startDeckPoll();
+    }else{
+      startBtn.style.display='';stopBtn.style.display='none';
+      if(s.phase==='complete'){
+        bar.style.width='100%';bar.className='progress-fill complete';
+        det.style.display='flex';stopDeckPoll();
+        ALL=await fetch('/api/games').then(r=>r.json());
+        applyView();updateStats();renderTypeChips();
+      }else if(s.phase==='error'||s.phase==='stopped'){
+        bar.className='progress-fill'+(s.phase==='error'?' error':'');stopDeckPoll();
+      }else{stopDeckPoll()}
+    }
+    msg.textContent=s.message||'';
+  }catch(e){}
+}
+
+// === DECK FILTER ===
+window.toggleDeckFilter=function(val){
+  if(!filters.deck){filters.deck=[val]}
+  else if(Array.isArray(filters.deck)){
+    const idx=filters.deck.indexOf(val);
+    if(idx>=0){filters.deck.splice(idx,1);if(filters.deck.length===0)filters.deck=null}
+    else filters.deck.push(val);
+  }
+  applyView();updateStats();renderTypeChips();
+};
+
+// === DECK/PROTONDB ENRICHMENT ===
+let deckPoll=null;
+window.startDeck=async function(){
+  try{const r=await fetch('/api/deck/start',{method:'POST'});const d=await r.json();
+    if(d.ok){toast('Deck/ProtonDB enrichment started');startDeckPoll()}else toast(d.error||'Failed')
+  }catch(e){toast('Failed')}
+};
+window.stopDeck=async function(){
+  try{await fetch('/api/deck/stop',{method:'POST'});toast('Stopping...')}catch(e){}
+};
+function startDeckPoll(){if(deckPoll)return;deckPoll=setInterval(pollDeck,2000)}
+function stopDeckPoll(){if(deckPoll){clearInterval(deckPoll);deckPoll=null}}
+async function pollDeck(){
+  try{
+    const r=await fetch('/api/deck/status');const s=await r.json();
+    const bar=document.getElementById('deck-progress');
+    const msg=document.getElementById('deck-msg');
+    const det=document.getElementById('deck-details');
+    const startBtn=document.getElementById('deck-start-btn');
+    const stopBtn=document.getElementById('deck-stop-btn');
+    if(s.running||s.phase==='running'||s.phase==='starting'||s.phase==='types'){
+      startBtn.style.display='none';stopBtn.style.display='';det.style.display='flex';
+      const pct=s.total>0?((s.completed/s.total)*100):0;
+      bar.style.width=(s.phase==='types'?'0':pct)+'%';bar.className='progress-fill';
+      document.getElementById('deck-count').textContent=s.completed+'/'+s.total;
+      document.getElementById('deck-current').textContent=s.phase==='types'?'Downloading Steam catalog...':s.current_game||'-';
+      document.getElementById('deck-eta').textContent=s.eta_seconds>0?fmtTime(s.eta_seconds):(s.phase==='types'?'~5s':'-');
+      document.getElementById('deck-skipped').textContent=s.skipped||0;
+      document.getElementById('deck-types').textContent=s.types_corrected||0;
+      startDeckPoll();
+    }else{
+      startBtn.style.display='';stopBtn.style.display='none';
+      if(s.phase==='complete'){
+        bar.style.width='100%';bar.className='progress-fill complete';
+        det.style.display='flex';stopDeckPoll();
+        ALL=await fetch('/api/games').then(r=>r.json());
+        applyView();updateStats();renderTypeChips();
+      }else if(s.phase==='error'||s.phase==='stopped'){
+        bar.className='progress-fill'+(s.phase==='error'?' error':'');stopDeckPoll();
+      }else{stopDeckPoll()}
+    }
+    msg.textContent=s.message||'';
+  }catch(e){}
+}
+
 window.settingsJump=function(e,id){
   e.preventDefault();
   document.getElementById(id).scrollIntoView({behavior:'smooth'});
@@ -1267,7 +1465,7 @@ function initSettingsScrollSpy(){
   const tab=document.getElementById('tab-settings');
   const nav=document.getElementById('settings-nav');
   if(!tab||!nav) return;
-  const secs=['sec-timing','sec-animation','sec-sstypes','sec-enrichment','sec-steamspy','sec-shovelware','sec-data'];
+  const secs=['sec-timing','sec-animation','sec-sstypes','sec-enrichment','sec-steamspy','sec-deck','sec-shovelware','sec-data'];
   tab.addEventListener('scroll',function(){
     let active='sec-timing';
     for(const id of secs){
@@ -1313,8 +1511,8 @@ async function pollEnrichment(){
       document.getElementById('ed-count').textContent=s.completed+'/'+s.total;
       document.getElementById('ed-current').textContent=s.current_game||'-';
       document.getElementById('ed-eta').textContent=s.eta_seconds>0?fmtTime(s.eta_seconds):'-';
-      document.getElementById('ed-errors').textContent=s.errors;
-      document.getElementById('ed-skipped').textContent=s.skipped;
+      document.getElementById('ed-errors').textContent=s.errors||0;
+      document.getElementById('ed-skipped').textContent=s.skipped||0;
       startEnrichPoll();
     }else{
       startBtn.style.display='';stopBtn.style.display='none';

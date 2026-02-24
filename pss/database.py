@@ -79,7 +79,10 @@ MUTABLE_CONFIG_KEYS = {
     "screensaver_types",
     "shovelware_min_signals", "shovelware_avg_playtime_threshold",
     "shovelware_reviews_threshold", "shovelware_review_ratio_threshold",
-    "shovelware_owners_threshold", "shovelware_require_unplayed"
+    "shovelware_owners_threshold", "shovelware_require_unplayed",
+    "shovelware_enable_avg_playtime", "shovelware_enable_reviews",
+    "shovelware_enable_ratio", "shovelware_enable_owners",
+    "shovelware_enable_user_playtime", "shovelware_enable_metacritic"
 }
 
 BUILTIN_PRESETS = [
@@ -126,6 +129,12 @@ SHOVELWARE_DEFAULTS = {
     "shovelware_review_ratio_threshold": 60,
     "shovelware_owners_threshold": 50000,
     "shovelware_require_unplayed": True,
+    "shovelware_enable_avg_playtime": True,
+    "shovelware_enable_reviews": True,
+    "shovelware_enable_ratio": True,
+    "shovelware_enable_owners": True,
+    "shovelware_enable_user_playtime": True,
+    "shovelware_enable_metacritic": True,
 }
 
 def _migrate_to_v3(db):

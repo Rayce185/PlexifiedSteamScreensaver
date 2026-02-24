@@ -377,11 +377,13 @@ input[type=file]{display:none}
 
     <div class="section-title" style="margin-top:28px">&#9760; Shovelware Detection</div>
     <div class="setting-row"><div><div class="setting-label">Minimum signals to flag</div><div class="setting-desc">How many indicators must trigger before a game is marked as shovelware (1-6)</div></div><div class="setting-input"><input type="number" id="sw-min" min="1" max="6" step="1"></div></div>
-    <div class="setting-row"><div><div class="setting-label">Global avg playtime threshold</div><div class="setting-desc">Flag if the global Steam average playtime is below this (minutes)</div></div><div class="setting-input"><input type="number" id="sw-avgpt" min="0" max="600" step="5"><span class="setting-unit">min</span></div></div>
-    <div class="setting-row"><div><div class="setting-label">Total reviews threshold</div><div class="setting-desc">Flag if total positive + negative reviews are below this</div></div><div class="setting-input"><input type="number" id="sw-reviews" min="0" max="10000" step="10"></div></div>
-    <div class="setting-row"><div><div class="setting-label">Review ratio threshold</div><div class="setting-desc">Flag if positive review percentage is below this</div></div><div class="setting-input"><input type="number" id="sw-ratio" min="0" max="100" step="5"><span class="setting-unit">%</span></div></div>
-    <div class="setting-row"><div><div class="setting-label">Owner count threshold</div><div class="setting-desc">Flag if estimated Steam owners are below this</div></div><div class="setting-input"><input type="number" id="sw-owners" min="0" max="1000000" step="5000"></div></div>
-    <div class="setting-row"><div><div class="setting-label">Only flag unplayed games</div><div class="setting-desc">If on, games you've played are never flagged as shovelware</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-unplayed"><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div></div>
+    <div class="setting-row"><div><div class="setting-label">Global avg playtime threshold</div><div class="setting-desc">Flag if the global Steam average playtime is below this (minutes)</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-en-avgpt"><span class="toggle-track"></span><span class="toggle-thumb"></span></label><input type="number" id="sw-avgpt" min="0" max="600" step="5"><span class="setting-unit">min</span></div></div>
+    <div class="setting-row"><div><div class="setting-label">Total reviews threshold</div><div class="setting-desc">Flag if total positive + negative reviews are below this</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-en-reviews"><span class="toggle-track"></span><span class="toggle-thumb"></span></label><input type="number" id="sw-reviews" min="0" max="10000" step="10"></div></div>
+    <div class="setting-row"><div><div class="setting-label">Review ratio threshold</div><div class="setting-desc">Flag if positive review percentage is below this</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-en-ratio"><span class="toggle-track"></span><span class="toggle-thumb"></span></label><input type="number" id="sw-ratio" min="0" max="100" step="5"><span class="setting-unit">%</span></div></div>
+    <div class="setting-row"><div><div class="setting-label">Owner count threshold</div><div class="setting-desc">Flag if estimated Steam owners are below this</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-en-owners"><span class="toggle-track"></span><span class="toggle-thumb"></span></label><input type="number" id="sw-owners" min="0" max="1000000" step="5000"></div></div>
+    <div class="setting-row"><div><div class="setting-label">Your playtime = 0</div><div class="setting-desc">Flag if you have never played this game</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-en-userpt"><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div></div>
+    <div class="setting-row"><div><div class="setting-label">No Metacritic score</div><div class="setting-desc">Flag if the game has no Metacritic rating (light signal)</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-en-meta"><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div></div>
+    <div class="setting-row"><div><div class="setting-label">Only flag unplayed games</div><div class="setting-desc">If on, games you've played are never flagged regardless of other signals</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-unplayed"><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div></div>
     <div style="margin-top:8px"><button class="btn btn-accent" onclick="saveShovelwareSettings()">Save Shovelware Settings</button></div>
 
     <div class="section-title" style="margin-top:28px">&#128190; Data Management</div>
@@ -441,31 +443,43 @@ function parseSteamSpyOwners(s){
 
 function getShovelwareSignals(g){
   const cfg=CONFIG;
-  const avgPtThresh=cfg.shovelware_avg_playtime_threshold||30;
-  const reviewsThresh=cfg.shovelware_reviews_threshold||100;
-  const ratioThresh=cfg.shovelware_review_ratio_threshold||60;
-  const ownersThresh=cfg.shovelware_owners_threshold||50000;
   const requireUnplayed=cfg.shovelware_require_unplayed!==false;
   let signals=0;
   // If require_unplayed is on and user HAS played it, never flag
   if(requireUnplayed && g.playtime_hours>0) return 0;
   // Global avg playtime below threshold
-  if(g.steamspy_avg_playtime!=null && g.steamspy_avg_playtime<avgPtThresh) signals++;
+  if(cfg.shovelware_enable_avg_playtime!==false){
+    const thresh=cfg.shovelware_avg_playtime_threshold||30;
+    if(g.steamspy_avg_playtime!=null && g.steamspy_avg_playtime<thresh) signals++;
+  }
   // Too few reviews
   const totalReviews=(g.steamspy_positive||0)+(g.steamspy_negative||0);
-  if(g.steamspy_positive!=null && totalReviews<reviewsThresh) signals++;
+  if(cfg.shovelware_enable_reviews!==false){
+    const thresh=cfg.shovelware_reviews_threshold||100;
+    if(g.steamspy_positive!=null && totalReviews<thresh) signals++;
+  }
   // Bad review ratio
-  if(totalReviews>0){
-    const ratio=Math.round((g.steamspy_positive||0)/totalReviews*100);
-    if(ratio<ratioThresh) signals++;
+  if(cfg.shovelware_enable_ratio!==false){
+    const thresh=cfg.shovelware_review_ratio_threshold||60;
+    if(totalReviews>0){
+      const ratio=Math.round((g.steamspy_positive||0)/totalReviews*100);
+      if(ratio<thresh) signals++;
+    }
   }
   // Low owners
-  const owners=parseSteamSpyOwners(g.steamspy_owners);
-  if(g.steamspy_owners && owners<ownersThresh) signals++;
+  if(cfg.shovelware_enable_owners!==false){
+    const thresh=cfg.shovelware_owners_threshold||50000;
+    const owners=parseSteamSpyOwners(g.steamspy_owners);
+    if(g.steamspy_owners && owners<thresh) signals++;
+  }
   // Your playtime = 0
-  if(!g.playtime_hours || g.playtime_hours===0) signals++;
+  if(cfg.shovelware_enable_user_playtime!==false){
+    if(!g.playtime_hours || g.playtime_hours===0) signals++;
+  }
   // No metacritic (light signal)
-  if(!g.metacritic_score) signals++;
+  if(cfg.shovelware_enable_metacritic!==false){
+    if(!g.metacritic_score) signals++;
+  }
   return signals;
 }
 
@@ -1141,6 +1155,12 @@ function loadSettings(){
   document.getElementById('sw-ratio').value=CONFIG.shovelware_review_ratio_threshold||60;
   document.getElementById('sw-owners').value=CONFIG.shovelware_owners_threshold||50000;
   document.getElementById('sw-unplayed').checked=CONFIG.shovelware_require_unplayed!==false;
+  document.getElementById('sw-en-avgpt').checked=CONFIG.shovelware_enable_avg_playtime!==false;
+  document.getElementById('sw-en-reviews').checked=CONFIG.shovelware_enable_reviews!==false;
+  document.getElementById('sw-en-ratio').checked=CONFIG.shovelware_enable_ratio!==false;
+  document.getElementById('sw-en-owners').checked=CONFIG.shovelware_enable_owners!==false;
+  document.getElementById('sw-en-userpt').checked=CONFIG.shovelware_enable_user_playtime!==false;
+  document.getElementById('sw-en-meta').checked=CONFIG.shovelware_enable_metacritic!==false;
 }
 
 window.saveSettings=async function(){
@@ -1171,7 +1191,13 @@ window.saveShovelwareSettings=async function(){
     shovelware_reviews_threshold:parseInt(document.getElementById('sw-reviews').value),
     shovelware_review_ratio_threshold:parseInt(document.getElementById('sw-ratio').value),
     shovelware_owners_threshold:parseInt(document.getElementById('sw-owners').value),
-    shovelware_require_unplayed:document.getElementById('sw-unplayed').checked
+    shovelware_require_unplayed:document.getElementById('sw-unplayed').checked,
+    shovelware_enable_avg_playtime:document.getElementById('sw-en-avgpt').checked,
+    shovelware_enable_reviews:document.getElementById('sw-en-reviews').checked,
+    shovelware_enable_ratio:document.getElementById('sw-en-ratio').checked,
+    shovelware_enable_owners:document.getElementById('sw-en-owners').checked,
+    shovelware_enable_user_playtime:document.getElementById('sw-en-userpt').checked,
+    shovelware_enable_metacritic:document.getElementById('sw-en-meta').checked
   };
   Object.assign(CONFIG,u);
   await saveConfig(u);

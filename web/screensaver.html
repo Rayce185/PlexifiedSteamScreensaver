@@ -28,6 +28,7 @@
   .badge-genre { background: rgba(88,166,255,0.15); color: rgba(88,166,255,0.9); border: 1px solid rgba(88,166,255,0.2); font-size: 0.78rem; padding: 3px 9px; }
   .badge-meta { background: rgba(255,193,7,0.2); color: rgba(255,193,7,0.95); border: 1px solid rgba(255,193,7,0.3); font-weight: 600; }
   .badge-vr { background: rgba(156,39,176,0.25); color: rgba(206,147,216,0.95); border: 1px solid rgba(156,39,176,0.3); }
+  .badge-dim { background: rgba(128,128,128,0.15); color: rgba(180,180,180,0.5); border: 1px solid rgba(128,128,128,0.15); }
   .badge-controller { background: rgba(0,150,136,0.2); color: rgba(128,203,196,0.95); border: 1px solid rgba(0,150,136,0.3); }
   .meta-text { color: rgba(255,255,255,0.55); font-size: 0.9rem; font-weight: 300; text-shadow: 0 1px 8px rgba(0,0,0,0.7); }
   .meta-dim { color: rgba(255,255,255,0.35); font-size: 0.82rem; font-weight: 300; font-style: italic; }
@@ -115,13 +116,17 @@
       document.getElementById('game-info').appendChild(d);
     },
     controller(g,m) {
-      if(!g.controller_support||g.controller_support==='none') return;
-      const label=g.controller_support==='full'?'\uD83C\uDFAE Full Controller':'\uD83C\uDFAE Partial Controller';
-      addDiv(m); m.appendChild(badge('badge-controller',label));
+      const cs=g.controller_support||'none';
+      const labels={'full':'\uD83C\uDFAE Full Controller','partial':'\uD83C\uDFAE Partial Controller','none':'\uD83C\uDFAE No Controller'};
+      const cls={'full':'badge-controller','partial':'badge-controller','none':'badge-dim'};
+      addDiv(m); m.appendChild(badge(cls[cs]||'badge-dim',labels[cs]||'\uD83C\uDFAE '+cs));
     },
     vr_support(g,m) {
-      if(!g.vr_support) return;
-      addDiv(m); m.appendChild(badge('badge-vr','\uD83E\uDD7D VR Supported'));
+      if(g.vr_support){
+        addDiv(m); m.appendChild(badge('badge-vr','\uD83E\uDD7D VR Supported'));
+      } else {
+        addDiv(m); m.appendChild(badge('badge-dim','\uD83E\uDD7D No VR'));
+      }
     },
     platforms(g,m) {
       if(!g.native_platforms) return;

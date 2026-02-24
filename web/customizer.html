@@ -1059,8 +1059,8 @@ window.showPreview=function(appid){
   details+='<dt>Playtime</dt><dd>'+(g.playtime_hours>0?g.playtime_hours+'h':'Never played')+'</dd>';
   if(g.last_played) details+='<dt>Last Played</dt><dd>'+g.last_played+'</dd>';
   if(g.primary_device) details+='<dt>Primary Device</dt><dd>'+g.primary_device+'</dd>';
-  if(g.controller_support&&g.controller_support!=='none') details+='<dt>Controller</dt><dd>'+g.controller_support+'</dd>';
-  if(g.vr_support) details+='<dt>VR</dt><dd>Supported</dd>';
+  details+='<dt>Controller</dt><dd>'+(g.controller_support==='full'?'Full support':g.controller_support==='partial'?'Partial':'None')+'</dd>';
+  details+='<dt>VR</dt><dd>'+(g.vr_support?'Supported':'No')+'</dd>';
   if(g.native_platforms){
     const pp=[];
     if(g.native_platforms.windows) pp.push('Windows');

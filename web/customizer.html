@@ -419,26 +419,6 @@ input[type=file]{display:none}
       </div>
     </div>
 
-    <div class="section-title" id="sec-deck" style="margin-top:28px">&#127918; Deck &amp; ProtonDB Enrichment</div>
-    <div class="enrich-panel">
-      <div class="enrich-header">
-        <div><strong>Deck compatibility + ProtonDB tiers + type correction</strong><div class="setting-desc">Phase 1: Downloads Steam catalog for proper type classification (game/software/tool/dlc). Phase 2: Fetches Deck Verified status + ProtonDB community tier per game. ~7 min for 1000 games. Requires Store enrichment first.</div></div>
-        <div style="display:flex;gap:6px">
-          <button class="btn btn-accent" id="deck-start-btn" onclick="startDeck()">&#127918; Start</button>
-          <button class="btn" id="deck-stop-btn" onclick="stopDeck()" style="display:none">&#9632; Stop</button>
-        </div>
-      </div>
-      <div class="progress-bar"><div class="progress-fill" id="deck-progress"></div></div>
-      <div id="deck-msg" class="enrich-status"></div>
-      <div class="enrich-details" id="deck-details" style="display:none">
-        <div>Progress: <span id="deck-count">0/0</span></div>
-        <div>Current: <span id="deck-current">-</span></div>
-        <div>ETA: <span id="deck-eta">-</span></div>
-        <div>Skipped: <span id="deck-skipped">0</span></div>
-        <div>Types corrected: <span id="deck-types">0</span></div>
-      </div>
-    </div>
-
     <div class="section-title" id="sec-shovelware" style="margin-top:28px">&#9760; Shovelware Detection</div>
     <div class="setting-row"><div><div class="setting-label">Minimum signals to flag</div><div class="setting-desc">How many indicators must trigger before a game is marked as shovelware (1-6)</div></div><div class="setting-input"><input type="number" id="sw-min" min="1" max="6" step="1"></div></div>
     <div class="setting-row"><div><div class="setting-label">Global avg playtime threshold</div><div class="setting-desc">Flag if the global Steam average playtime is below this (minutes)</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-en-avgpt"><span class="toggle-track"></span><span class="toggle-thumb"></span></label><input type="number" id="sw-avgpt" min="0" max="600" step="5"><span class="setting-unit">min</span></div></div>
@@ -584,7 +564,7 @@ async function init(){
     buildSortMenu(); buildFilterPanel(); renderPresets(); renderTypeChips();
     // Load default preset
     loadPresetByName('All Games');
-    applyView(); updateStats(); loadSettings(); renderDisplay(); pollEnrichment(); pollSteamSpy(); pollDeck(); pollDeck(); renderSSTypes(); initSettingsScrollSpy();
+    applyView(); updateStats(); loadSettings(); renderDisplay(); pollEnrichment(); pollSteamSpy(); pollDeck(); renderSSTypes(); initSettingsScrollSpy();
   }catch(e){console.error('Init failed',e)}
 }
 
@@ -1151,9 +1131,7 @@ window.showPreview=function(appid){
   const _deckL={3:'\u2705 Verified',2:'\u26A0\uFE0F Playable',1:'\u274C Unsupported',0:'Unknown'};
   details+='<dt>Steam Deck</dt><dd>'+(_deckL[g.deck_verified||0])+'</dd>';
   if(g.protondb_tier) details+='<dt>ProtonDB</dt><dd style="text-transform:capitalize">'+g.protondb_tier+(g.protondb_total?' ('+g.protondb_total+' reports)':'')+'</dd>';
-  const deckLabels={3:'\u2705 Verified',2:'\u26A0\uFE0F Playable',1:'\u274C Unsupported',0:'Unknown'};
-  details+='<dt>Steam Deck</dt><dd>'+(deckLabels[g.deck_verified||0])+'</dd>';
-  if(g.protondb_tier) details+='<dt>ProtonDB</dt><dd style="text-transform:capitalize">'+g.protondb_tier+(g.protondb_total?' ('+g.protondb_total+' reports)':'')+'</dd>';
+
   if(g.native_platforms){
     const pp=[];
     if(g.native_platforms.windows) pp.push('Windows');
@@ -1194,9 +1172,7 @@ const ELEMENTS=[
   {id:'vr_support',icon:'\uD83E\uDD7D',name:'VR Support',desc:'VR headset support badge',example:'\uD83E\uDD7D VR Supported',cat:'enriched'},
   {id:'deck_verified',icon:'\uD83C\uDFAE',name:'Steam Deck',desc:'Official Deck compatibility rating',example:'\u2705 Verified',cat:'enriched'},
   {id:'protondb',icon:'\uD83C\uDFC6',name:'ProtonDB',desc:'Community Linux/Proton compatibility',example:'\uD83C\uDFC6 Platinum',cat:'enriched'},
-  {id:'deck_verified',icon:'\uD83C\uDFAE',name:'Steam Deck',desc:'Valve\'s official Deck compatibility rating',example:'\u2705 Verified / \u26A0 Playable',cat:'enriched'},
-  {id:'protondb',icon:'\uD83C\uDFC6',name:'ProtonDB',desc:'Community Linux/Proton compatibility tier',example:'\uD83C\uDFC6 Platinum',cat:'enriched'},
-  {id:'platforms',icon:'\uD83D\uDDA5',name:'Native Platforms',desc:'Which platforms run natively',example:'Win / Linux / Mac',cat:'enriched'}
+    {id:'platforms',icon:'\uD83D\uDDA5',name:'Native Platforms',desc:'Which platforms run natively',example:'Win / Linux / Mac',cat:'enriched'}
 ];
 
 function renderDisplay(){
@@ -1409,51 +1385,6 @@ window.toggleDeckFilter=function(val){
   }
   applyView();updateStats();renderTypeChips();
 };
-
-// === DECK/PROTONDB ENRICHMENT ===
-let deckPoll=null;
-window.startDeck=async function(){
-  try{const r=await fetch('/api/deck/start',{method:'POST'});const d=await r.json();
-    if(d.ok){toast('Deck/ProtonDB enrichment started');startDeckPoll()}else toast(d.error||'Failed')
-  }catch(e){toast('Failed')}
-};
-window.stopDeck=async function(){
-  try{await fetch('/api/deck/stop',{method:'POST'});toast('Stopping...')}catch(e){}
-};
-function startDeckPoll(){if(deckPoll)return;deckPoll=setInterval(pollDeck,2000)}
-function stopDeckPoll(){if(deckPoll){clearInterval(deckPoll);deckPoll=null}}
-async function pollDeck(){
-  try{
-    const r=await fetch('/api/deck/status');const s=await r.json();
-    const bar=document.getElementById('deck-progress');
-    const msg=document.getElementById('deck-msg');
-    const det=document.getElementById('deck-details');
-    const startBtn=document.getElementById('deck-start-btn');
-    const stopBtn=document.getElementById('deck-stop-btn');
-    if(s.running||s.phase==='running'||s.phase==='starting'||s.phase==='types'){
-      startBtn.style.display='none';stopBtn.style.display='';det.style.display='flex';
-      const pct=s.total>0?((s.completed/s.total)*100):0;
-      bar.style.width=(s.phase==='types'?'0':pct)+'%';bar.className='progress-fill';
-      document.getElementById('deck-count').textContent=s.completed+'/'+s.total;
-      document.getElementById('deck-current').textContent=s.phase==='types'?'Downloading Steam catalog...':s.current_game||'-';
-      document.getElementById('deck-eta').textContent=s.eta_seconds>0?fmtTime(s.eta_seconds):(s.phase==='types'?'~5s':'-');
-      document.getElementById('deck-skipped').textContent=s.skipped||0;
-      document.getElementById('deck-types').textContent=s.types_corrected||0;
-      startDeckPoll();
-    }else{
-      startBtn.style.display='';stopBtn.style.display='none';
-      if(s.phase==='complete'){
-        bar.style.width='100%';bar.className='progress-fill complete';
-        det.style.display='flex';stopDeckPoll();
-        ALL=await fetch('/api/games').then(r=>r.json());
-        applyView();updateStats();renderTypeChips();
-      }else if(s.phase==='error'||s.phase==='stopped'){
-        bar.className='progress-fill'+(s.phase==='error'?' error':'');stopDeckPoll();
-      }else{stopDeckPoll()}
-    }
-    msg.textContent=s.message||'';
-  }catch(e){}
-}
 
 window.settingsJump=function(e,id){
   e.preventDefault();

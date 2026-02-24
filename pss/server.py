@@ -29,9 +29,10 @@ LOG_DIR = PSS_ROOT / "logs"
 DB_PATH = DATA_DIR / "pss.db"
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)
+_log_ts = datetime.now().strftime("%y%m%d_%H%M%S")
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.FileHandler(LOG_DIR / "pss_server.log"), logging.StreamHandler()]
+    handlers=[logging.FileHandler(LOG_DIR / f"pss_{_log_ts}.log"), logging.StreamHandler()]
 )
 log = logging.getLogger("pss")
 

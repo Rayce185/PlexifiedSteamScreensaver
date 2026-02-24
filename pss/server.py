@@ -113,9 +113,9 @@ def steamspy_worker():
 
 
 def fetch_steam_library(api_key, steamid):
-    url = (f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/"
+    url = (f"https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/"
            f"?key={api_key}&steamid={steamid}"
-           f"&include_appinfo=1&include_played_free_games=1&format=json")
+           f"&include_appinfo=1&include_played_free_games=1&skip_unvetted_apps=false&include_free_sub=1&format=json")
     log.info("Fetching Steam library...")
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "PSS/0.1"})
@@ -129,21 +129,33 @@ def fetch_steam_library(api_key, steamid):
         return None
 
 
-def get_installed_appids():
+def scan_local_manifests():
+    """Scan appmanifest_*.acf for all locally installed apps (including tools/software/soundtracks).
+    Returns dict of {appid: name}."""
     manifests_dir = Path(STEAM_PATH) / "steamapps"
-    installed = set()
+    result = {}
     if not manifests_dir.exists():
-        return installed
+        return result
     for m in manifests_dir.glob("appmanifest_*.acf"):
         try:
-            content = m.read_text(encoding="utf-8", errors="ignore")
-            for line in content.splitlines():
+            text = m.read_text(encoding="utf-8", errors="ignore")
+            appid = None
+            name = None
+            for line in text.splitlines():
                 if '"appid"' in line:
-                    installed.add(int(line.split('"')[3]))
-                    break
+                    appid = int(line.split('"')[3])
+                elif '"name"' in line:
+                    name = line.split('"')[3]
+            if appid and name:
+                result[appid] = name
         except Exception:
             pass
-    return installed
+    return result
+
+
+def get_installed_appids():
+    """Returns set of installed appids (for marking installed status)."""
+    return set(scan_local_manifests().keys())
 
 
 def parse_loginusers_vdf() -> tuple[str, str] | tuple[None, None]:

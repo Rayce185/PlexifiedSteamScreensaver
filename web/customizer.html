@@ -82,7 +82,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .fp-title{font-size:.9rem;font-weight:600}
 .fp-body{padding:16px 20px}
 .fp-section{margin-bottom:16px}
-.fp-label{font-size:.78rem;font-weight:600;color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.fp-label{font-size:.78rem;font-weight:600;color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:6px;width:100%}
 .fp-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .fp-check{display:flex;align-items:center;gap:5px;font-size:.78rem;color:var(--text-dim);cursor:pointer;padding:3px 0}
 .fp-check input{accent-color:var(--accent)}
@@ -265,6 +265,11 @@ input[type=file]{display:none}
 
     <div class="toolbar-divider"></div>
 
+    <!-- Type chips -->
+    <div class="toolbar-section" id="type-chips" style="gap:4px"></div>
+
+    <div class="toolbar-divider"></div>
+
     <!-- Quick filter chips -->
     <div class="toolbar-section" id="quick-chips"></div>
 
@@ -411,7 +416,7 @@ const SORT_OPTIONS=[
 ];
 
 const ALPHA='#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-const TYPE_LABELS={game:'Game',dlc:'DLC',music:'Soundtrack',demo:'Demo',mod:'Mod',video:'Video',advertising:'Ad',tool:'Tool',episode:'Episode',series:'Series',hardware:'Hardware'};
+const TYPE_LABELS={game:'Game',dlc:'DLC',music:'Soundtrack',demo:'Demo',mod:'Mod',video:'Video',advertising:'Ad',tool:'Tool',software:'Software',episode:'Episode',series:'Series',hardware:'Hardware',config:'Config',beta:'Beta'};
 
 // === INIT ===
 async function init(){
@@ -423,7 +428,7 @@ async function init(){
       fetch('/api/filter-values').then(r=>r.json())
     ]);
     ALL=gr; CONFIG=cr; PRESETS=pr; FVALS=fv;
-    buildSortMenu(); buildFilterPanel(); renderPresets();
+    buildSortMenu(); buildFilterPanel(); renderPresets(); renderTypeChips();
     // Load default preset
     loadPresetByName('All Games');
     applyView(); updateStats(); loadSettings(); renderDisplay(); pollEnrichment(); renderSSTypes();
@@ -437,7 +442,7 @@ function getFiltered(){
     // Search
     if(s && !g.name.toLowerCase().includes(s)) return false;
     // Type
-    if(filters.type.length>0 && !filters.type.includes(g.type||'game')) return false;
+    if(!filters.type.includes(g.type||'game')) return false;
     // Included/Excluded
     const isExcl=g.excluded||g.nsfw_auto;
     if(filters.included==='included' && isExcl) return false;
@@ -660,6 +665,25 @@ window.setSort=function(f,d){
   buildSortMenu(); applyView();
 };
 
+// === TYPE CHIPS ===
+function renderTypeChips(){
+  const cont=document.getElementById('type-chips');
+  const types=FVALS.types||['game'];
+  cont.innerHTML=types.map(t=>{
+    const on=filters.type.includes(t);
+    const label=TYPE_LABELS[t]||t;
+    const count=ALL.filter(g=>(g.type||'game')===t).length;
+    return '<span class="chip'+(on?' active':'')+'" onclick="toggleTypeChip(''+t+'')" title="'+count+' items">'+label+' <span class="chip-count">'+count+'</span></span>';
+  }).join('');
+}
+
+window.toggleTypeChip=function(t){
+  const idx=filters.type.indexOf(t);
+  if(idx>=0) filters.type.splice(idx,1);
+  else filters.type.push(t);
+  renderTypeChips(); buildFilterPanel(); applyView();
+};
+
 // === QUICK CHIPS ===
 function renderQuickChips(){
   const cont=document.getElementById('quick-chips');
@@ -699,7 +723,7 @@ function buildFilterPanel(){
 
   let h='';
   // Content Type
-  h+='<div class="fp-section"><div class="fp-label">Content Type</div><div class="fp-row" id="fp-types">';
+  h+='<div class="fp-section"><div class="fp-label">Content Type <span style="margin-left:auto;display:flex;gap:4px"><button class="btn btn-sm" onclick="fpTypeAll(true)" style="padding:1px 6px;font-size:.66rem">All</button><button class="btn btn-sm" onclick="fpTypeAll(false)" style="padding:1px 6px;font-size:.66rem">None</button></span></div><div class="fp-row" id="fp-types" style="flex-wrap:wrap">';
   types.forEach(t=>{h+='<label class="fp-check"><input type="checkbox" value="'+t+'" '+(filters.type.includes(t)?'checked':'')+' onchange="fpTypeChange()"> '+(TYPE_LABELS[t]||t)+'</label>'});
   h+='</div></div>';
   // Included
@@ -757,8 +781,13 @@ window.fpTri=function(group,val){
   if(key){filters[key]=val; buildFilterPanel(); renderQuickChips()}
 };
 
+window.fpTypeAll=function(selectAll){
+  document.querySelectorAll('#fp-types input').forEach(i=>i.checked=selectAll);
+  fpTypeChange();
+};
 window.fpTypeChange=function(){
   filters.type=Array.from(document.querySelectorAll('#fp-types input:checked')).map(i=>i.value);
+  renderTypeChips();
 };
 window.fpGenreChange=function(){
   filters.genres=Array.from(document.querySelectorAll('#fp-genres input:checked')).map(i=>i.value);
@@ -776,7 +805,12 @@ window.openFilters=function(){
   document.getElementById('filter-overlay').classList.add('open');
 };
 window.closeFilters=function(){
-  // Read values from panel into filters
+  // Read ALL values from panel into filters
+  filters.type=Array.from(document.querySelectorAll('#fp-types input:checked')).map(i=>i.value);
+  renderTypeChips();
+  filters.genres=Array.from(document.querySelectorAll('#fp-genres input:checked')).map(i=>i.value);
+  filters.controller=Array.from(document.querySelectorAll('#fp-ctrl input:checked')).map(i=>i.value);
+  filters.platforms=Array.from(document.querySelectorAll('#fp-plat input:checked')).map(i=>i.value);
   const ptMin=document.getElementById('fp-pt-min')?.value;
   const ptMax=document.getElementById('fp-pt-max')?.value;
   filters.playtime_min=ptMin?parseFloat(ptMin):null;
@@ -800,12 +834,12 @@ window.resetFilters=function(){
     genres:[],developer:'',controller:[],vr:'all',platforms:[],free:'all',
     release_year_min:null,release_year_max:null};
   document.getElementById('search').value='';
-  buildFilterPanel(); renderQuickChips();
+  buildFilterPanel(); renderQuickChips(); renderTypeChips();
 };
 
 function updateFilterBadge(){
   let count=0;
-  if(filters.type.length>0 && !(filters.type.length===1 && filters.type[0]==='game')) count++;
+  if(!(filters.type.length===1 && filters.type[0]==='game')) count++;
   if(filters.included!=='all') count++;
   if(filters.installed!=='all') count++;
   if(filters.played!=='all') count++;
@@ -871,7 +905,7 @@ function loadPresetData(p){
   sortDir=p.sort_dir||'asc';
   document.getElementById('search').value='';
   document.getElementById('sort-label').textContent=SORT_OPTIONS.find(o=>o.field===sortField&&o.dir===sortDir)?.label||'Custom';
-  buildSortMenu(); renderQuickChips(); renderPresets(); applyView();
+  buildSortMenu(); renderQuickChips(); renderTypeChips(); renderPresets(); applyView();
 }
 
 window.saveCurrentPreset=async function(){
@@ -1082,7 +1116,7 @@ async function pollEnrichment(){
         det.style.display='flex';stopEnrichPoll();
         ALL=await fetch('/api/games').then(r=>r.json());
         FVALS=await fetch('/api/filter-values').then(r=>r.json());
-        applyView();updateStats();buildFilterPanel();renderSSTypes();
+        applyView();updateStats();buildFilterPanel();renderTypeChips();renderSSTypes();
       }else if(s.phase==='error'||s.phase==='stopped'){
         bar.className='progress-fill'+(s.phase==='error'?' error':'');stopEnrichPoll();
       }else{stopEnrichPoll()}
@@ -1120,7 +1154,7 @@ window.refreshLibrary=async function(){
       toast('Refreshed \u2014 '+d.count+' games');
       ALL=await fetch('/api/games').then(r=>r.json());
       FVALS=await fetch('/api/filter-values').then(r=>r.json());
-      applyView();updateStats();buildFilterPanel();
+      applyView();updateStats();buildFilterPanel();renderTypeChips();
     }else toast('Failed')
   }catch(e){toast('Refresh failed')}
 };

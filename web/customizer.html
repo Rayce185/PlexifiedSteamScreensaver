@@ -797,7 +797,7 @@ function updateStats(){
   const hasAnyDeck=Object.keys(deckCounts).some(k=>k!=='0'&&deckCounts[k]>0);
   const oldDc=document.getElementById('deck-chips');if(oldDc)oldDc.remove();
   if(hasAnyDeck){
-    const dc=document.createElement('span');dc.id='deck-chips';dc.style.cssText='display:inline-flex;gap:3px;margin-left:6px';
+    const dc=document.createElement('span');dc.id='deck-chips';dc.style.cssText='display:inline-flex;gap:3px;margin-left:6px;align-items:center';const dl=document.createElement('span');dl.textContent='Steam Deck:';dl.style.cssText='font-size:.66rem;color:rgba(255,255,255,.45);margin-right:2px';dc.appendChild(dl);
     [3,2,1,0].forEach(d=>{
       if(!deckCounts[d]) return;
       const c=document.createElement('span');

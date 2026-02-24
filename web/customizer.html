@@ -158,7 +158,11 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 
 /* DISPLAY TAB */
 .display-tab{flex-direction:column;padding:20px;overflow-y:auto;max-width:900px;margin:0 auto;width:100%}
-.section-title{font-size:.8rem;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin:18px 0 10px;display:flex;align-items:center;gap:8px}
+.settings-nav{display:flex;gap:2px;padding:8px 16px 0;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+.settings-nav a{font-size:.7rem;padding:5px 10px;color:var(--text-dim);text-decoration:none;border-radius:6px 6px 0 0;transition:all .15s;white-space:nowrap}
+.settings-nav a:hover{color:var(--text);background:rgba(255,255,255,.05)}
+.settings-nav a.active{color:var(--accent);background:rgba(88,166,255,.08)}
+.section-title{font-size:.8rem;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin:18px 0 10px;display:flex;align-items:center;gap:8px;scroll-margin-top:44px}
 .section-title:first-child{margin-top:0}
 .de-card{display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;transition:border-color .15s}
 .de-card:hover{border-color:var(--text-faint)}
@@ -322,21 +326,21 @@ input[type=file]{display:none}
 <!-- SETTINGS TAB -->
 <div class="tab-content" id="tab-settings">
   <div class="settings-tab">
-    <div class="section-title">&#9201; Timing</div>
+    <div class="section-title" id="sec-timing">&#9201; Timing</div>
     <div class="setting-row"><div><div class="setting-label">Idle activation</div><div class="setting-desc">Mute + screensaver after this idle time</div></div><div class="setting-input"><input type="number" id="s-idle" min="30" max="600" step="10"><span class="setting-unit">sec</span></div></div>
     <div class="setting-row"><div><div class="setting-label">Slide duration</div><div class="setting-desc">How long each game hero is shown</div></div><div class="setting-input"><input type="number" id="s-slide" min="5" max="60" step="1"><span class="setting-unit">sec</span></div></div>
     <div class="setting-row"><div><div class="setting-label">Transition speed</div><div class="setting-desc">Crossfade between slides</div></div><div class="setting-input"><input type="number" id="s-trans" min="0.5" max="5" step="0.5"><span class="setting-unit">sec</span></div></div>
     <div class="setting-row"><div><div class="setting-label">Title delay</div><div class="setting-desc">Delay before game info fades in</div></div><div class="setting-input"><input type="number" id="s-title" min="0" max="10" step="0.5"><span class="setting-unit">sec</span></div></div>
-    <div class="section-title">&#127916; Animation</div>
+    <div class="section-title" id="sec-animation">&#127916; Animation</div>
     <div class="setting-row"><div><div class="setting-label">Ken Burns intensity</div><div class="setting-desc">Pan/zoom amount (0 = static, 1 = full)</div></div><div class="setting-input"><input type="range" id="s-kb" min="0" max="1" step="0.05" oninput="document.getElementById('kb-val').textContent=parseFloat(this.value).toFixed(2)"><span class="range-val" id="kb-val">0.70</span></div></div>
     <div style="margin-top:12px"><button class="btn btn-accent" onclick="saveSettings()">Save Settings</button></div>
 
-    <div class="section-title" style="margin-top:28px">&#127918; Screensaver Content Types</div>
+    <div class="section-title" id="sec-sstypes" style="margin-top:28px">&#127918; Content Types</div>
     <div class="setting-row"><div><div class="setting-label">Content types shown in screensaver</div><div class="setting-desc">Select which content types appear in the screensaver slideshow</div></div></div>
     <div class="ss-types" id="ss-types"></div>
     <div style="margin-top:8px"><button class="btn btn-accent btn-sm" onclick="saveSSTypes()">Save Types</button></div>
 
-    <div class="section-title" style="margin-top:28px">&#128640; Steam Enrichment</div>
+    <div class="section-title" id="sec-enrichment" style="margin-top:28px">&#128640; Steam Enrichment</div>
     <div class="enrich-panel">
       <div class="enrich-header">
         <div><strong>Enrich game data from Steam Store</strong><div class="setting-desc">Fetches genres, developer, Metacritic score, controller/VR support, etc.</div></div>
@@ -356,7 +360,7 @@ input[type=file]{display:none}
       </div>
     </div>
 
-    <div class="section-title" style="margin-top:28px">&#128200; SteamSpy Enrichment</div>
+    <div class="section-title" id="sec-steamspy" style="margin-top:28px">&#128200; SteamSpy Enrichment</div>
     <div class="enrich-panel">
       <div class="enrich-header">
         <div><strong>Fetch global player stats from SteamSpy</strong><div class="setting-desc">Fetches owner counts, global avg playtime, review counts — needed for Shovelware detection. Requires Steam enrichment to run first. ~4 min for 1000 games.</div></div>
@@ -375,7 +379,7 @@ input[type=file]{display:none}
       </div>
     </div>
 
-    <div class="section-title" style="margin-top:28px">&#9760; Shovelware Detection</div>
+    <div class="section-title" id="sec-shovelware" style="margin-top:28px">&#9760; Shovelware Detection</div>
     <div class="setting-row"><div><div class="setting-label">Minimum signals to flag</div><div class="setting-desc">How many indicators must trigger before a game is marked as shovelware (1-6)</div></div><div class="setting-input"><input type="number" id="sw-min" min="1" max="6" step="1"></div></div>
     <div class="setting-row"><div><div class="setting-label">Global avg playtime threshold</div><div class="setting-desc">Flag if the global Steam average playtime is below this (minutes)</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-en-avgpt"><span class="toggle-track"></span><span class="toggle-thumb"></span></label><input type="number" id="sw-avgpt" min="0" max="600" step="5"><span class="setting-unit">min</span></div></div>
     <div class="setting-row"><div><div class="setting-label">Total reviews threshold</div><div class="setting-desc">Flag if total positive + negative reviews are below this</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-en-reviews"><span class="toggle-track"></span><span class="toggle-thumb"></span></label><input type="number" id="sw-reviews" min="0" max="10000" step="10"></div></div>
@@ -386,7 +390,7 @@ input[type=file]{display:none}
     <div class="setting-row"><div><div class="setting-label">Only flag unplayed games</div><div class="setting-desc">If on, games you've played are never flagged regardless of other signals</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-unplayed"><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div></div>
     <div style="margin-top:8px"><button class="btn btn-accent" onclick="saveShovelwareSettings()">Save Shovelware Settings</button></div>
 
-    <div class="section-title" style="margin-top:28px">&#128190; Data Management</div>
+    <div class="section-title" id="sec-data" style="margin-top:28px">&#128190; Data Management</div>
     <div class="data-actions">
       <button class="btn" onclick="exportSettings()">&#11015; Export Settings</button>
       <button class="btn" onclick="document.getElementById('import-file').click()">&#11014; Import Settings</button>
@@ -518,7 +522,7 @@ async function init(){
     buildSortMenu(); buildFilterPanel(); renderPresets(); renderTypeChips();
     // Load default preset
     loadPresetByName('All Games');
-    applyView(); updateStats(); loadSettings(); renderDisplay(); pollEnrichment(); pollSteamSpy(); renderSSTypes();
+    applyView(); updateStats(); loadSettings(); renderDisplay(); pollEnrichment(); pollSteamSpy(); renderSSTypes(); initSettingsScrollSpy();
   }catch(e){console.error('Init failed',e)}
 }
 
@@ -1246,6 +1250,29 @@ async function pollSteamSpy(){
     }
     msg.textContent=s.message||'';
   }catch(e){}
+}
+
+window.settingsJump=function(e,id){
+  e.preventDefault();
+  document.getElementById(id).scrollIntoView({behavior:'smooth'});
+};
+
+// Settings scroll spy — highlight active nav link
+function initSettingsScrollSpy(){
+  const tab=document.getElementById('tab-settings');
+  const nav=document.getElementById('settings-nav');
+  if(!tab||!nav) return;
+  const secs=['sec-timing','sec-animation','sec-sstypes','sec-enrichment','sec-steamspy','sec-shovelware','sec-data'];
+  tab.addEventListener('scroll',function(){
+    let active='sec-timing';
+    for(const id of secs){
+      const el=document.getElementById(id);
+      if(el && el.offsetTop-tab.scrollTop<=60) active=id;
+    }
+    nav.querySelectorAll('a').forEach(a=>{
+      a.classList.toggle('active',a.getAttribute('href')==='#'+active);
+    });
+  });
 }
 
 window.saveSSTypes=async function(){

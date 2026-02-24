@@ -225,6 +225,30 @@ def process_games(raw_games):
             "logo": f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/logo.png",
             "store_url": f"https://store.steampowered.com/app/{appid}"
         })
+    # Supplement with locally-installed apps not in API response (tools, software, soundtracks)
+    api_appids = {g["appid"] for g in processed}
+    local_apps = scan_local_manifests()
+    supplemented = 0
+    for appid, name in local_apps.items():
+        if appid not in api_appids:
+            processed.append({
+                "appid": appid, "name": name,
+                "playtime_hours": 0, "playtime_windows_hours": 0,
+                "playtime_linux_hours": 0, "playtime_deck_hours": 0,
+                "playtime_mac_hours": 0,
+                "last_played": None, "last_played_ts": 0,
+                "primary_device": None, "installed_htpc": True,
+                "ever_played": False, "nsfw_auto": False,
+                "hero_2x": f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/library_hero_2x.jpg",
+                "hero_1x": f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/library_hero.jpg",
+                "header": f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg",
+                "logo": f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/logo.png",
+                "store_url": f"https://store.steampowered.com/app/{appid}"
+            })
+            supplemented += 1
+    if supplemented:
+        log.info(f"Added {supplemented} locally-installed apps not in Steam API (tools/software/soundtracks)")
+
     processed.sort(key=lambda x: x["name"].lower())
     return processed
 

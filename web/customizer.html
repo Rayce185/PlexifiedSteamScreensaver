@@ -6,131 +6,230 @@
 <title>Screensaver Customizer</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-:root{--bg:#0d1117;--surface:#161b22;--surface-hover:#1c2129;--border:#30363d;--text:#e6edf3;--text-dim:#8b949e;--text-faint:#484f58;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--orange:#d29922;--purple:#bc8cff}
+:root{--bg:#0d1117;--surface:#161b22;--surface-hover:#1c2129;--border:#30363d;--text:#e6edf3;--text-dim:#8b949e;--text-faint:#484f58;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--orange:#d29922;--purple:#bc8cff;--cyan:#39d2c0}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;line-height:1.5;height:100vh;overflow:hidden}
-.header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface)}
-.header h1{font-size:1.1rem;font-weight:600;display:flex;align-items:center;gap:10px}
-.stats{display:flex;gap:16px;font-size:.82rem;color:var(--text-dim)}
+
+/* HEADER */
+.header{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border-bottom:1px solid var(--border);background:var(--surface);min-height:48px}
+.header h1{font-size:1rem;font-weight:600;display:flex;align-items:center;gap:8px}
+.stats{display:flex;gap:14px;font-size:.78rem;color:var(--text-dim)}
 .stat-val{color:var(--text);font-weight:600}
-.header-actions{display:flex;gap:8px}
-.btn{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.78rem;font-weight:500;cursor:pointer;transition:all .15s}
+.header-actions{display:flex;gap:6px}
+.btn{padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:.76rem;font-weight:500;cursor:pointer;transition:all .15s;white-space:nowrap}
 .btn:hover{background:var(--surface-hover);border-color:var(--text-faint)}
 .btn-accent{border-color:var(--accent);color:var(--accent)}
 .btn-accent:hover{background:rgba(88,166,255,.1)}
-/* Tabs */
-.tab-bar{display:flex;border-bottom:1px solid var(--border);background:var(--surface);padding:0 24px}
-.tab{padding:10px 20px;font-size:.85rem;font-weight:500;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.btn-green{border-color:var(--green);color:var(--green)}
+.btn-green:hover{background:rgba(63,185,80,.1)}
+.btn-red{border-color:var(--red);color:var(--red)}
+.btn-red:hover{background:rgba(248,81,73,.1)}
+.btn-sm{padding:3px 8px;font-size:.72rem}
+
+/* TABS */
+.tab-bar{display:flex;border-bottom:1px solid var(--border);background:var(--surface);padding:0 20px}
+.tab{padding:8px 18px;font-size:.82rem;font-weight:500;color:var(--text-dim);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
 .tab:hover{color:var(--text)}
 .tab.active{color:var(--accent);border-bottom-color:var(--accent)}
-.tab-content{display:none;height:calc(100vh - 110px)}
-.tab-content.active{display:flex}
-/* Games tab */
-.games-tab{display:flex;width:100%}
-.panel{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
-.panel:first-child{border-right:1px solid var(--border)}
-.panel-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);background:rgba(22,27,34,.8);min-height:48px}
-.panel-title{font-size:.9rem;font-weight:600;display:flex;align-items:center;gap:8px}
-.panel-count{font-size:.72rem;color:var(--text-dim);background:rgba(255,255,255,.06);padding:2px 8px;border-radius:10px}
-.search-box{display:flex;align-items:center;gap:6px}
-.search-box input{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 10px;color:var(--text);font-size:.8rem;width:180px;outline:none}
-.search-box input:focus{border-color:var(--accent)}
-.filter-btn{padding:3px 8px;border-radius:4px;border:1px solid transparent;background:transparent;color:var(--text-dim);font-size:.72rem;cursor:pointer}
-.filter-btn.active{color:var(--accent);border-color:rgba(88,166,255,.3);background:rgba(88,166,255,.08)}
-.game-list-wrap{flex:1;display:flex;overflow:hidden}
-.game-list{flex:1;overflow-y:auto;padding:6px}
+.tab-content{display:none;height:calc(100vh - 100px);overflow:hidden}
+.tab-content.active{display:flex;flex-direction:column}
+
+/* GAMES TOOLBAR */
+.toolbar{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--border);background:rgba(22,27,34,.6);flex-wrap:wrap}
+.toolbar-section{display:flex;align-items:center;gap:6px}
+.toolbar-divider{width:1px;height:22px;background:var(--border);margin:0 4px}
+.search-input{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px 5px 30px;color:var(--text);font-size:.8rem;width:220px;outline:none}
+.search-input:focus{border-color:var(--accent)}
+.search-wrap{position:relative}
+.search-wrap::before{content:'\1F50D';position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:.72rem;opacity:.5}
+
+/* CHIPS / QUICK FILTERS */
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;border:1px solid var(--border);background:transparent;color:var(--text-dim);font-size:.72rem;cursor:pointer;transition:all .15s;user-select:none}
+.chip:hover{border-color:var(--text-faint);color:var(--text)}
+.chip.active{border-color:var(--accent);color:var(--accent);background:rgba(88,166,255,.08)}
+.chip-count{font-size:.65rem;opacity:.7;margin-left:2px}
+
+/* SORT DROPDOWN */
+.sort-wrap{position:relative}
+.sort-btn{display:flex;align-items:center;gap:4px}
+.sort-menu{position:absolute;top:100%;right:0;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:50;min-width:200px;display:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.sort-menu.open{display:block}
+.sort-opt{padding:6px 12px;border-radius:4px;font-size:.78rem;color:var(--text-dim);cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.sort-opt:hover{background:var(--surface-hover);color:var(--text)}
+.sort-opt.active{color:var(--accent)}
+
+/* PRESET DROPDOWN */
+.preset-wrap{position:relative}
+.preset-menu{position:absolute;top:100%;left:0;margin-top:4px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px;z-index:50;min-width:240px;display:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.preset-menu.open{display:block}
+.preset-item{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-radius:4px;font-size:.78rem;color:var(--text-dim);cursor:pointer}
+.preset-item:hover{background:var(--surface-hover);color:var(--text)}
+.preset-item.active{color:var(--accent)}
+.preset-item .del{opacity:0;color:var(--red);font-size:.7rem;cursor:pointer;padding:2px 4px}
+.preset-item:hover .del{opacity:.7}
+.preset-item .del:hover{opacity:1}
+.preset-sep{height:1px;background:var(--border);margin:4px 0}
+.preset-save{display:flex;gap:4px;padding:6px 8px}
+.preset-save input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 8px;color:var(--text);font-size:.76rem;outline:none}
+
+/* FILTER POPUP */
+.filter-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.5);z-index:90;display:none;align-items:flex-start;justify-content:center;padding-top:80px}
+.filter-overlay.open{display:flex}
+.filter-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:700px;max-height:70vh;overflow-y:auto;box-shadow:0 16px 48px rgba(0,0,0,.5)}
+.filter-panel::-webkit-scrollbar{width:6px}
+.filter-panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.fp-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1}
+.fp-title{font-size:.9rem;font-weight:600}
+.fp-body{padding:16px 20px}
+.fp-section{margin-bottom:16px}
+.fp-label{font-size:.78rem;font-weight:600;color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.fp-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.fp-check{display:flex;align-items:center;gap:5px;font-size:.78rem;color:var(--text-dim);cursor:pointer;padding:3px 0}
+.fp-check input{accent-color:var(--accent)}
+.fp-check:hover{color:var(--text)}
+.fp-range{display:flex;align-items:center;gap:8px}
+.fp-range input[type=number]{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 8px;color:var(--text);font-size:.78rem;width:70px;outline:none;text-align:center}
+.fp-range span{color:var(--text-faint);font-size:.78rem}
+.fp-select{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--text);font-size:.78rem;outline:none;max-height:120px;overflow-y:auto;width:100%}
+.fp-select option{padding:2px 4px}
+.fp-tri{display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.fp-tri button{padding:4px 12px;border:none;background:transparent;color:var(--text-dim);font-size:.74rem;cursor:pointer;transition:all .1s}
+.fp-tri button:not(:last-child){border-right:1px solid var(--border)}
+.fp-tri button.active{background:rgba(88,166,255,.12);color:var(--accent)}
+.fp-tri button:hover:not(.active){background:var(--surface-hover)}
+.fp-footer{display:flex;justify-content:space-between;padding:12px 20px;border-top:1px solid var(--border);position:sticky;bottom:0;background:var(--surface)}
+
+/* GAME LIST */
+.game-list-area{flex:1;display:flex;overflow:hidden}
+.game-list{flex:1;overflow-y:auto;padding:4px 8px}
 .game-list::-webkit-scrollbar{width:6px}
 .game-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
-/* Alpha scroll */
-.alpha-strip{width:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:4px 0;overflow:hidden;border-left:1px solid var(--border);background:rgba(13,17,23,.5)}
-.alpha-strip span{font-size:.58rem;color:var(--text-faint);cursor:pointer;padding:1px 4px;line-height:1.3;transition:color .1s}
+
+/* ALPHA STRIP */
+.alpha-strip{width:22px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;padding:4px 0;overflow:hidden;border-left:1px solid var(--border);background:rgba(13,17,23,.5)}
+.alpha-strip span{font-size:.56rem;color:var(--text-faint);cursor:pointer;padding:1px 3px;line-height:1.2;transition:color .1s}
 .alpha-strip span:hover{color:var(--accent)}
-.alpha-strip span.has-games{color:var(--text-dim)}
-.game-card{display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:6px;cursor:pointer;border:1px solid transparent;transition:background .1s}
-.game-card:hover{background:var(--surface-hover);border-color:var(--border)}
-.game-thumb{width:100px;height:38px;border-radius:3px;object-fit:cover;background:var(--surface);flex-shrink:0}
-.game-card-info{flex:1;min-width:0}
-.game-card-name{font-size:.82rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:1px}
-.game-card-meta{display:flex;align-items:center;gap:6px;font-size:.68rem;color:var(--text-dim);flex-wrap:wrap}
-.micro-badge{padding:1px 5px;border-radius:3px;font-size:.64rem;font-weight:500}
-.mb-installed{background:rgba(63,185,80,.15);color:var(--green)}
-.mb-not{background:rgba(255,255,255,.04);color:var(--text-faint)}
-.mb-nsfw{background:rgba(248,81,73,.15);color:var(--red)}
-.mb-enriched{background:rgba(88,166,255,.1);color:var(--accent)}
-.game-card-action{flex-shrink:0;width:28px;height:28px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--text-dim);font-size:.9rem;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0}
-.game-card:hover .game-card-action{opacity:1}
-.game-card-action.add:hover{color:var(--green);border-color:var(--green)}
-.game-card-action.remove:hover{color:var(--red);border-color:var(--red)}
-.empty-state{display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-faint);font-size:.85rem}
-/* Display tab */
-.display-tab{flex-direction:column;padding:24px;overflow-y:auto;max-width:900px;margin:0 auto;width:100%}
-.section-title{font-size:.82rem;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin:20px 0 12px;display:flex;align-items:center;gap:8px}
+.alpha-strip span.has{color:var(--text-dim)}
+.alpha-strip.hidden{display:none}
+
+/* GAME CARD */
+.gc{display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:6px;border:1px solid transparent;transition:all .12s;cursor:pointer;position:relative}
+.gc:hover{background:var(--surface-hover);border-color:var(--border)}
+.gc-check{flex-shrink:0;width:18px;height:18px;accent-color:var(--accent);cursor:pointer}
+.gc-thumb{width:120px;height:45px;border-radius:4px;object-fit:cover;background:var(--surface);flex-shrink:0}
+.gc-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.gc-row1{display:flex;align-items:center;gap:8px}
+.gc-name{font-size:.84rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.gc-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.gc-playtime{font-size:.76rem;color:var(--text-dim);font-weight:500}
+.gc-score{font-size:.72rem;font-weight:600;color:var(--orange);background:rgba(210,153,34,.12);padding:1px 6px;border-radius:3px}
+.gc-row2{display:flex;align-items:center;gap:6px;font-size:.7rem;color:var(--text-faint);flex-wrap:wrap}
+.gc .micro{padding:1px 5px;border-radius:3px;font-size:.64rem;font-weight:500}
+.gc .m-type{background:rgba(57,210,192,.12);color:var(--cyan)}
+.gc .m-inst{background:rgba(63,185,80,.12);color:var(--green)}
+.gc .m-nsfw{background:rgba(248,81,73,.12);color:var(--red)}
+.gc .m-excl{background:rgba(248,81,73,.08);color:var(--red);border:1px solid rgba(248,81,73,.15)}
+.gc .m-genre{background:rgba(88,166,255,.08);color:var(--accent)}
+.gc .m-ctrl{background:rgba(0,150,136,.12);color:#80cbc4}
+.gc .m-vr{background:rgba(156,39,176,.12);color:#ce93d8}
+.gc-dim{color:var(--text-faint)}
+.gc-dot{color:var(--text-faint)}
+
+/* GAME PREVIEW */
+.preview-overlay{position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,.7);z-index:80;display:none;align-items:center;justify-content:center}
+.preview-overlay.open{display:flex}
+.preview-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:700px;max-height:80vh;overflow:hidden;box-shadow:0 16px 48px rgba(0,0,0,.5)}
+.preview-hero{width:100%;height:260px;object-fit:cover;display:block;background:var(--bg)}
+.preview-body{padding:20px}
+.preview-name{font-size:1.5rem;font-weight:600;margin-bottom:8px}
+.preview-meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.preview-desc{font-size:.85rem;color:var(--text-dim);line-height:1.5;margin-bottom:16px}
+.preview-details{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.8rem}
+.preview-details dt{color:var(--text-faint)}
+.preview-details dd{color:var(--text);font-weight:500}
+.preview-actions{display:flex;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border)}
+
+/* BULK BAR */
+.bulk-bar{display:none;align-items:center;justify-content:space-between;padding:8px 16px;background:rgba(88,166,255,.06);border-bottom:1px solid rgba(88,166,255,.15)}
+.bulk-bar.visible{display:flex}
+.bulk-info{font-size:.8rem;color:var(--accent)}
+.bulk-actions{display:flex;gap:6px}
+
+/* DISPLAY TAB */
+.display-tab{flex-direction:column;padding:20px;overflow-y:auto;max-width:900px;margin:0 auto;width:100%}
+.section-title{font-size:.8rem;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.08em;margin:18px 0 10px;display:flex;align-items:center;gap:8px}
 .section-title:first-child{margin-top:0}
-.de-card{display:flex;align-items:center;gap:16px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:8px;transition:border-color .15s}
+.de-card{display:flex;align-items:center;gap:14px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;transition:border-color .15s}
 .de-card:hover{border-color:var(--text-faint)}
 .de-card.disabled{opacity:.5}
-.de-icon{font-size:1.4rem;width:36px;text-align:center;flex-shrink:0}
+.de-icon{font-size:1.3rem;width:32px;text-align:center;flex-shrink:0}
 .de-info{flex:1;min-width:0}
-.de-name{font-size:.9rem;font-weight:600;margin-bottom:2px}
-.de-desc{font-size:.75rem;color:var(--text-dim);margin-bottom:4px}
-.de-example{font-size:.72rem;color:var(--text-faint);font-style:italic;padding:4px 8px;background:rgba(0,0,0,.3);border-radius:4px;display:inline-block}
-.de-badge{font-size:.65rem;padding:2px 6px;border-radius:3px;margin-left:8px}
+.de-name{font-size:.85rem;font-weight:600;margin-bottom:2px}
+.de-desc{font-size:.72rem;color:var(--text-dim);margin-bottom:3px}
+.de-example{font-size:.7rem;color:var(--text-faint);font-style:italic;padding:3px 7px;background:rgba(0,0,0,.3);border-radius:3px;display:inline-block}
+.de-badge{font-size:.62rem;padding:2px 5px;border-radius:3px;margin-left:6px}
 .de-badge-enriched{background:rgba(188,140,255,.15);color:var(--purple)}
 .de-controls{display:flex;align-items:center;gap:8px;flex-shrink:0}
 .de-arrows{display:flex;flex-direction:column;gap:2px}
-.de-arrow{width:24px;height:18px;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--text-dim);font-size:.6rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.de-arrow{width:22px;height:16px;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--text-dim);font-size:.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .de-arrow:hover{color:var(--text);border-color:var(--text-faint);background:var(--surface-hover)}
-.toggle{position:relative;width:36px;height:20px;cursor:pointer;flex-shrink:0}
+.toggle{position:relative;width:34px;height:18px;cursor:pointer;flex-shrink:0}
 .toggle input{display:none}
-.toggle-track{position:absolute;top:0;left:0;width:100%;height:100%;background:var(--border);border-radius:10px;transition:background .2s}
+.toggle-track{position:absolute;top:0;left:0;width:100%;height:100%;background:var(--border);border-radius:9px;transition:background .2s}
 .toggle input:checked+.toggle-track{background:var(--accent)}
-.toggle-thumb{position:absolute;top:2px;left:2px;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s}
+.toggle-thumb{position:absolute;top:2px;left:2px;width:14px;height:14px;background:#fff;border-radius:50%;transition:transform .2s}
 .toggle input:checked~.toggle-thumb{transform:translateX(16px)}
-/* Settings tab */
-.settings-tab{flex-direction:column;padding:24px;overflow-y:auto;max-width:900px;margin:0 auto;width:100%}
-.setting-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid rgba(48,54,61,.5)}
-.setting-label{font-size:.88rem}
-.setting-desc{font-size:.72rem;color:var(--text-dim);margin-top:2px}
+
+/* SETTINGS TAB */
+.settings-tab{flex-direction:column;padding:20px;overflow-y:auto;max-width:900px;margin:0 auto;width:100%}
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(48,54,61,.5)}
+.setting-label{font-size:.85rem}
+.setting-desc{font-size:.7rem;color:var(--text-dim);margin-top:2px}
 .setting-input{display:flex;align-items:center;gap:8px}
-.setting-input input[type=number]{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:.85rem;width:80px;text-align:center;outline:none}
+.setting-input input[type=number]{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 10px;color:var(--text);font-size:.82rem;width:80px;text-align:center;outline:none}
 .setting-input input[type=number]:focus{border-color:var(--accent)}
-.setting-unit{font-size:.72rem;color:var(--text-faint)}
+.setting-unit{font-size:.7rem;color:var(--text-faint)}
 .setting-input input[type=range]{width:140px;accent-color:var(--accent)}
-.range-val{font-size:.82rem;color:var(--text);min-width:32px;text-align:right}
-/* Enrichment */
-.enrich-panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px;margin:12px 0}
-.enrich-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.enrich-status{font-size:.82rem;color:var(--text-dim)}
-.progress-bar{width:100%;height:8px;background:var(--bg);border-radius:4px;overflow:hidden;margin-bottom:8px}
+.range-val{font-size:.8rem;color:var(--text);min-width:32px;text-align:right}
+.enrich-panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px;margin:10px 0}
+.enrich-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.enrich-status{font-size:.78rem;color:var(--text-dim)}
+.progress-bar{width:100%;height:8px;background:var(--bg);border-radius:4px;overflow:hidden;margin-bottom:6px}
 .progress-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .5s ease;width:0}
 .progress-fill.rate-limited{background:var(--orange)}
 .progress-fill.error{background:var(--red)}
 .progress-fill.complete{background:var(--green)}
-.enrich-details{display:flex;gap:20px;font-size:.75rem;color:var(--text-dim);flex-wrap:wrap}
+.enrich-details{display:flex;gap:16px;font-size:.72rem;color:var(--text-dim);flex-wrap:wrap}
 .enrich-detail span{color:var(--text);font-weight:500}
-/* Data section */
-.data-actions{display:flex;gap:10px;margin:12px 0;flex-wrap:wrap}
-.data-actions .btn{padding:8px 16px}
+.data-actions{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap}
+.data-actions .btn{padding:7px 14px}
 input[type=file]{display:none}
-/* Toast */
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface);border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:8px;font-size:.85rem;z-index:200;transition:transform .3s ease,opacity .3s ease;opacity:0;pointer-events:none}
+
+/* SCREENSAVER TYPES CONFIG */
+.ss-types{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.ss-types label{display:flex;align-items:center;gap:4px;font-size:.78rem;color:var(--text-dim);cursor:pointer}
+.ss-types label input{accent-color:var(--accent)}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 18px;border-radius:8px;font-size:.82rem;z-index:200;transition:transform .3s ease,opacity .3s ease;opacity:0;pointer-events:none}
 .toast.visible{transform:translateX(-50%) translateY(0);opacity:1}
 </style>
 </head>
 <body>
+
 <div class="header">
-  <h1>&#127918; Screensaver Customizer</h1>
+  <h1>&#127918; PSS Customizer</h1>
   <div class="stats">
-    <span>Library: <span class="stat-val" id="stat-total">-</span></span>
-    <span>In Screensaver: <span class="stat-val" id="stat-included" style="color:var(--green)">-</span></span>
-    <span>Excluded: <span class="stat-val" id="stat-excluded" style="color:var(--red)">-</span></span>
-    <span>NSFW: <span class="stat-val" id="stat-nsfw" style="color:var(--orange)">-</span></span>
-    <span>Enriched: <span class="stat-val" id="stat-enriched" style="color:var(--purple)">-</span></span>
+    <span>Library: <span class="stat-val" id="st-total">-</span></span>
+    <span>In Screensaver: <span class="stat-val" id="st-included" style="color:var(--green)">-</span></span>
+    <span>Excluded: <span class="stat-val" id="st-excluded" style="color:var(--red)">-</span></span>
+    <span>Enriched: <span class="stat-val" id="st-enriched" style="color:var(--purple)">-</span></span>
   </div>
   <div class="header-actions">
-    <button class="btn btn-accent" onclick="openScreensaver()">&#9654; Preview</button>
+    <button class="btn btn-accent" onclick="window.open('/screensaver','_blank')">&#9654; Preview</button>
   </div>
 </div>
+
 <div class="tab-bar">
   <div class="tab active" onclick="switchTab('games')">&#127918; Games</div>
   <div class="tab" onclick="switchTab('display')">&#127912; Display</div>
@@ -139,38 +238,72 @@ input[type=file]{display:none}
 
 <!-- GAMES TAB -->
 <div class="tab-content active" id="tab-games">
-  <div class="games-tab">
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">&#9989; Included <span class="panel-count" id="inc-count">0</span></div>
-        <div class="search-box">
-          <input type="text" id="search-inc" placeholder="Search..." oninput="renderInc()">
-          <button class="filter-btn active" data-f="all" onclick="setF(this,'inc')">All</button>
-          <button class="filter-btn" data-f="installed" onclick="setF(this,'inc')">Installed</button>
-          <button class="filter-btn" data-f="played" onclick="setF(this,'inc')">Played</button>
-          <button class="filter-btn" data-f="unplayed" onclick="setF(this,'inc')">Unplayed</button>
+  <div class="toolbar">
+    <div class="toolbar-section">
+      <!-- Presets -->
+      <div class="preset-wrap">
+        <button class="btn btn-sm" id="preset-btn" onclick="togglePresetMenu()">&#11088; <span id="preset-active-name">All Games</span> &#9662;</button>
+        <div class="preset-menu" id="preset-menu">
+          <div id="preset-list"></div>
+          <div class="preset-sep"></div>
+          <div class="preset-save">
+            <input type="text" id="preset-name-input" placeholder="Save current as..." maxlength="30">
+            <button class="btn btn-sm btn-accent" onclick="saveCurrentPreset()">Save</button>
+          </div>
         </div>
       </div>
-      <div class="game-list-wrap">
-        <div class="game-list" id="list-inc"></div>
-        <div class="alpha-strip" id="alpha-inc"></div>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <!-- Search -->
+    <div class="toolbar-section">
+      <div class="search-wrap">
+        <input type="text" class="search-input" id="search" placeholder="Search games..." oninput="applyView()">
       </div>
     </div>
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">&#128683; Excluded <span class="panel-count" id="exc-count">0</span></div>
-        <div class="search-box">
-          <input type="text" id="search-exc" placeholder="Search..." oninput="renderExc()">
-          <button class="filter-btn active" data-f="all" onclick="setF(this,'exc')">All</button>
-          <button class="filter-btn" data-f="nsfw" onclick="setF(this,'exc')">NSFW</button>
-          <button class="filter-btn" data-f="manual" onclick="setF(this,'exc')">Manual</button>
-        </div>
-      </div>
-      <div class="game-list-wrap">
-        <div class="game-list" id="list-exc"></div>
-        <div class="alpha-strip" id="alpha-exc"></div>
+
+    <div class="toolbar-divider"></div>
+
+    <!-- Quick filter chips -->
+    <div class="toolbar-section" id="quick-chips"></div>
+
+    <div class="toolbar-divider"></div>
+
+    <!-- Advanced filters button -->
+    <div class="toolbar-section">
+      <button class="btn btn-sm" id="filter-adv-btn" onclick="openFilters()">&#9881; Filters <span id="filter-count-badge"></span></button>
+    </div>
+
+    <div class="toolbar-divider"></div>
+
+    <!-- Sort -->
+    <div class="toolbar-section">
+      <div class="sort-wrap">
+        <button class="btn btn-sm sort-btn" onclick="toggleSortMenu()">&#8645; <span id="sort-label">Name A-Z</span></button>
+        <div class="sort-menu" id="sort-menu"></div>
       </div>
     </div>
+
+    <div style="flex:1"></div>
+    <div class="toolbar-section">
+      <span id="view-count" style="font-size:.74rem;color:var(--text-faint)"></span>
+    </div>
+  </div>
+
+  <!-- Bulk bar -->
+  <div class="bulk-bar" id="bulk-bar">
+    <span class="bulk-info" id="bulk-info">0 games in view</span>
+    <div class="bulk-actions">
+      <button class="btn btn-sm btn-green" onclick="bulkInclude()">&#10003; Include All Filtered</button>
+      <button class="btn btn-sm btn-red" onclick="bulkExclude()">&#10007; Exclude All Filtered</button>
+    </div>
+  </div>
+
+  <!-- Game list -->
+  <div class="game-list-area">
+    <div class="game-list" id="game-list"></div>
+    <div class="alpha-strip" id="alpha-strip"></div>
   </div>
 </div>
 
@@ -189,14 +322,19 @@ input[type=file]{display:none}
     <div class="setting-row"><div><div class="setting-label">Title delay</div><div class="setting-desc">Delay before game info fades in</div></div><div class="setting-input"><input type="number" id="s-title" min="0" max="10" step="0.5"><span class="setting-unit">sec</span></div></div>
     <div class="section-title">&#127916; Animation</div>
     <div class="setting-row"><div><div class="setting-label">Ken Burns intensity</div><div class="setting-desc">Pan/zoom amount (0 = static, 1 = full)</div></div><div class="setting-input"><input type="range" id="s-kb" min="0" max="1" step="0.05" oninput="document.getElementById('kb-val').textContent=parseFloat(this.value).toFixed(2)"><span class="range-val" id="kb-val">0.70</span></div></div>
-    <div style="margin-top:16px"><button class="btn btn-accent" onclick="saveSettings()">Save Settings</button></div>
+    <div style="margin-top:12px"><button class="btn btn-accent" onclick="saveSettings()">Save Settings</button></div>
 
-    <div class="section-title" style="margin-top:32px">&#128640; Steam Enrichment</div>
+    <div class="section-title" style="margin-top:28px">&#127918; Screensaver Content Types</div>
+    <div class="setting-row"><div><div class="setting-label">Content types shown in screensaver</div><div class="setting-desc">Select which content types appear in the screensaver slideshow</div></div></div>
+    <div class="ss-types" id="ss-types"></div>
+    <div style="margin-top:8px"><button class="btn btn-accent btn-sm" onclick="saveSSTypes()">Save Types</button></div>
+
+    <div class="section-title" style="margin-top:28px">&#128640; Steam Enrichment</div>
     <div class="enrich-panel">
       <div class="enrich-header">
-        <div><strong>Enrich game data from Steam Store</strong><div class="setting-desc">Fetches genres, developer, Metacritic score, controller/VR support, etc. Takes ~25min for a full library due to rate limits.</div></div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-accent" id="enrich-start-btn" onclick="startEnrichment()">&#128640; Start Enrichment</button>
+        <div><strong>Enrich game data from Steam Store</strong><div class="setting-desc">Fetches genres, developer, Metacritic score, controller/VR support, etc.</div></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-accent" id="enrich-start-btn" onclick="startEnrichment()">&#128640; Start</button>
           <button class="btn" id="enrich-stop-btn" onclick="stopEnrichment()" style="display:none">&#9632; Stop</button>
         </div>
       </div>
@@ -207,11 +345,11 @@ input[type=file]{display:none}
         <div>Current: <span id="ed-current">-</span></div>
         <div>ETA: <span id="ed-eta">-</span></div>
         <div>Errors: <span id="ed-errors">0</span></div>
-        <div>Skipped (cached): <span id="ed-skipped">0</span></div>
+        <div>Cached: <span id="ed-skipped">0</span></div>
       </div>
     </div>
 
-    <div class="section-title" style="margin-top:32px">&#128190; Data Management</div>
+    <div class="section-title" style="margin-top:28px">&#128190; Data Management</div>
     <div class="data-actions">
       <button class="btn" onclick="exportSettings()">&#11015; Export Settings</button>
       <button class="btn" onclick="document.getElementById('import-file').click()">&#11014; Import Settings</button>
@@ -222,88 +360,268 @@ input[type=file]{display:none}
   </div>
 </div>
 
+<!-- FILTER OVERLAY -->
+<div class="filter-overlay" id="filter-overlay" onclick="if(event.target===this)closeFilters()">
+  <div class="filter-panel">
+    <div class="fp-header">
+      <span class="fp-title">&#9881; Advanced Filters</span>
+      <button class="btn btn-sm" onclick="closeFilters()">&#10005; Close</button>
+    </div>
+    <div class="fp-body" id="filter-body"></div>
+    <div class="fp-footer">
+      <button class="btn btn-sm" onclick="resetFilters()">Reset All</button>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-sm btn-accent" onclick="applyView();closeFilters()">Apply</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PREVIEW OVERLAY -->
+<div class="preview-overlay" id="preview-overlay" onclick="if(event.target===this)closePreview()">
+  <div class="preview-card" id="preview-card"></div>
+</div>
+
 <div class="toast" id="toast"></div>
 <script>
 (function(){
 'use strict';
-let ALL=[],exclSet=new Set(),CONFIG={},incF='all',excF='all',saveTO=null,enrichPoll=null;
 
-const ALPHA='#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+// === STATE ===
+let ALL=[], CONFIG={}, PRESETS=[], FVALS={};
+let filters={type:['game'],included:'included',installed:'all',played:'all',nsfw:'hide',enriched:'all',
+  playtime_min:null,playtime_max:null,metacritic_min:null,metacritic_max:null,
+  genres:[],developer:'',controller:[],vr:'all',platforms:[],free:'all',
+  release_year_min:null,release_year_max:null};
+let sortField='name', sortDir='asc';
+let activePresetName='All Games';
+let enrichPoll=null;
 
-const ELEMENTS=[
-  {id:'installed_badge',icon:'\u2705',name:'Install Status',desc:'Shows whether the game is installed locally',example:'\u2713 Installed / Not installed / Never installed',cat:'basic'},
-  {id:'playtime',icon:'\u23F1',name:'Playtime',desc:'Total hours played across all platforms',example:'142.3h played',cat:'basic'},
-  {id:'device_breakdown',icon:'\uD83D\uDCBB',name:'Device Breakdown',desc:'Hours split by PC, Steam Deck, Linux, Mac',example:'PC 98h \u00b7 Deck 44h',cat:'basic'},
-  {id:'last_played',icon:'\uD83D\uDCC5',name:'Last Played',desc:'Date the game was last launched',example:'Last: 2025-12-15',cat:'basic'},
-  {id:'genres',icon:'\uD83C\uDFAD',name:'Genre Tags',desc:'Up to 3 genre tags from Steam store page',example:'Action \u00b7 RPG \u00b7 Open World',cat:'enriched'},
-  {id:'developer',icon:'\uD83D\uDEE0',name:'Developer',desc:'Game developer/studio name',example:'CD Projekt Red',cat:'enriched'},
-  {id:'metacritic',icon:'\u2B50',name:'Metacritic Score',desc:'Metacritic review score when available',example:'\u2605 94',cat:'enriched'},
-  {id:'release_date',icon:'\uD83D\uDCC6',name:'Release Date',desc:'Original release date from Steam',example:'Dec 10, 2020',cat:'enriched'},
-  {id:'description',icon:'\uD83D\uDCDD',name:'Short Description',desc:'One-liner blurb from the store page (shows below main info)',example:'An open-world action adventure...',cat:'enriched'},
-  {id:'controller',icon:'\uD83C\uDFAE',name:'Controller Support',desc:'Full or partial controller support indicator',example:'\uD83C\uDFAE Full Controller',cat:'enriched'},
-  {id:'vr_support',icon:'\uD83E\uDD7D',name:'VR Support',desc:'Shows VR badge when game supports VR headsets',example:'\uD83E\uDD7D VR Supported',cat:'enriched'},
-  {id:'platforms',icon:'\uD83D\uDDA5',name:'Native Platforms',desc:'Which platforms the game runs on natively',example:'Win / Linux / Mac',cat:'enriched'}
+const SORT_OPTIONS=[
+  {field:'name',dir:'asc',label:'Name A\u2192Z'},
+  {field:'name',dir:'desc',label:'Name Z\u2192A'},
+  {field:'playtime_hours',dir:'desc',label:'Playtime \u2193'},
+  {field:'playtime_hours',dir:'asc',label:'Playtime \u2191'},
+  {field:'last_played_ts',dir:'desc',label:'Last Played \u2193'},
+  {field:'last_played_ts',dir:'asc',label:'Last Played \u2191'},
+  {field:'metacritic_score',dir:'desc',label:'Metacritic \u2193'},
+  {field:'release_date',dir:'desc',label:'Release Date \u2193'},
+  {field:'release_date',dir:'asc',label:'Release Date \u2191'},
+  {field:'type',dir:'asc',label:'Type A\u2192Z'},
 ];
 
+const ALPHA='#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const TYPE_LABELS={game:'Game',dlc:'DLC',music:'Soundtrack',demo:'Demo',mod:'Mod',video:'Video',advertising:'Ad',tool:'Tool',episode:'Episode',series:'Series',hardware:'Hardware'};
+
+// === INIT ===
 async function init(){
   try{
-    const[gr,er,cr]=await Promise.all([fetch('/api/games'),fetch('/api/excluded'),fetch('/api/config')]);
-    ALL=await gr.json(); const ed=await er.json(); CONFIG=await cr.json();
-    exclSet=new Set(ed.excluded||[]);
-    render(); loadSettings(); renderDisplay(); pollEnrichment();
-  }catch(e){console.error(e)}
+    const[gr,cr,pr,fv]=await Promise.all([
+      fetch('/api/games').then(r=>r.json()),
+      fetch('/api/config').then(r=>r.json()),
+      fetch('/api/presets').then(r=>r.json()),
+      fetch('/api/filter-values').then(r=>r.json())
+    ]);
+    ALL=gr; CONFIG=cr; PRESETS=pr; FVALS=fv;
+    buildSortMenu(); buildFilterPanel(); renderPresets();
+    // Load default preset
+    loadPresetByName('All Games');
+    applyView(); updateStats(); loadSettings(); renderDisplay(); pollEnrichment(); renderSSTypes();
+  }catch(e){console.error('Init failed',e)}
 }
 
-function render(){renderInc();renderExc();updateStats()}
+// === FILTERING ===
+function getFiltered(){
+  const s=(document.getElementById('search').value||'').toLowerCase();
+  return ALL.filter(g=>{
+    // Search
+    if(s && !g.name.toLowerCase().includes(s)) return false;
+    // Type
+    if(filters.type.length>0 && !filters.type.includes(g.type||'game')) return false;
+    // Included/Excluded
+    const isExcl=g.excluded||g.nsfw_auto;
+    if(filters.included==='included' && isExcl) return false;
+    if(filters.included==='excluded' && !isExcl) return false;
+    // Installed
+    if(filters.installed==='yes' && !g.installed_htpc) return false;
+    if(filters.installed==='no' && g.installed_htpc) return false;
+    // Played
+    if(filters.played==='played' && !g.ever_played) return false;
+    if(filters.played==='never' && g.ever_played) return false;
+    // NSFW
+    if(filters.nsfw==='hide' && g.nsfw_auto) return false;
+    if(filters.nsfw==='only' && !g.nsfw_auto) return false;
+    // Enriched
+    if(filters.enriched==='yes' && !g.enriched) return false;
+    if(filters.enriched==='no' && g.enriched) return false;
+    // Playtime range
+    if(filters.playtime_min!=null && g.playtime_hours<filters.playtime_min) return false;
+    if(filters.playtime_max!=null && g.playtime_hours>filters.playtime_max) return false;
+    // Metacritic range
+    if(filters.metacritic_min!=null){
+      if(!g.metacritic_score || g.metacritic_score<filters.metacritic_min) return false;
+    }
+    if(filters.metacritic_max!=null && g.metacritic_score && g.metacritic_score>filters.metacritic_max) return false;
+    // Genres
+    if(filters.genres.length>0){
+      if(!g.genres||!g.genres.length) return false;
+      if(!filters.genres.some(fg=>g.genres.includes(fg))) return false;
+    }
+    // Developer
+    if(filters.developer && (!g.developer||!g.developer.toLowerCase().includes(filters.developer.toLowerCase()))) return false;
+    // Controller
+    if(filters.controller.length>0 && !filters.controller.includes(g.controller_support||'none')) return false;
+    // VR
+    if(filters.vr==='yes' && !g.vr_support) return false;
+    if(filters.vr==='no' && g.vr_support) return false;
+    // Platforms
+    if(filters.platforms.length>0 && g.native_platforms){
+      if(!filters.platforms.some(p=>g.native_platforms[p])) return false;
+    }
+    // Free
+    if(filters.free==='yes' && !g.is_free) return false;
+    if(filters.free==='no' && g.is_free) return false;
+    // Release year
+    if((filters.release_year_min!=null||filters.release_year_max!=null)&&g.release_date){
+      const yr=parseInt(g.release_date.match(/\d{4}/)?.[0]);
+      if(yr){
+        if(filters.release_year_min!=null && yr<filters.release_year_min) return false;
+        if(filters.release_year_max!=null && yr>filters.release_year_max) return false;
+      }
+    }
+    return true;
+  });
+}
 
-// === GAMES TAB ===
-window.renderInc=function(){
-  const s=document.getElementById('search-inc').value.toLowerCase();
-  let g=ALL.filter(x=>!exclSet.has(x.appid)&&!x.nsfw_auto);
-  if(incF==='installed')g=g.filter(x=>x.installed_htpc);
-  else if(incF==='played')g=g.filter(x=>x.ever_played);
-  else if(incF==='unplayed')g=g.filter(x=>!x.ever_played);
-  if(s)g=g.filter(x=>x.name.toLowerCase().includes(s));
-  document.getElementById('inc-count').textContent=g.length;
-  document.getElementById('list-inc').innerHTML=g.length?g.map(x=>card(x,'remove')).join(''):'<div class="empty-state">No games match</div>';
-  buildAlpha('inc',g);
-};
+function getSorted(arr){
+  const f=sortField, d=sortDir==='asc'?1:-1;
+  return [...arr].sort((a,b)=>{
+    let va=a[f], vb=b[f];
+    if(f==='name') return d*((va||'').toLowerCase()<(vb||'').toLowerCase()?-1:1);
+    if(f==='release_date'){
+      const ya=parseInt((va||'').match(/\d{4}/)?.[0])||0;
+      const yb=parseInt((vb||'').match(/\d{4}/)?.[0])||0;
+      return d*(ya-yb)||((a.name||'').toLowerCase()<(b.name||'').toLowerCase()?-1:1);
+    }
+    va=va||0; vb=vb||0;
+    return d*(va-vb)||((a.name||'').toLowerCase()<(b.name||'').toLowerCase()?-1:1);
+  });
+}
 
-window.renderExc=function(){
-  const s=document.getElementById('search-exc').value.toLowerCase();
-  let g=ALL.filter(x=>exclSet.has(x.appid)||x.nsfw_auto);
-  if(excF==='nsfw')g=g.filter(x=>x.nsfw_auto);
-  else if(excF==='manual')g=g.filter(x=>exclSet.has(x.appid)&&!x.nsfw_auto);
-  if(s)g=g.filter(x=>x.name.toLowerCase().includes(s));
-  document.getElementById('exc-count').textContent=g.length;
-  document.getElementById('list-exc').innerHTML=g.length?g.map(x=>card(x,'add')).join(''):'<div class="empty-state">No excluded games</div>';
-  buildAlpha('exc',g);
-};
+// === RENDER ===
+function applyView(){
+  const filtered=getFiltered();
+  const sorted=getSorted(filtered);
+  renderList(sorted);
+  updateBulkBar(sorted);
+  updateAlpha(sorted);
+  updateViewCount(sorted.length);
+  updateFilterBadge();
+  updateStats();
+}
+window.applyView=applyView;
 
-function card(g,action){
-  const b=[];
-  if(g.installed_htpc)b.push('<span class="micro-badge mb-installed">Installed</span>');
-  else if(!g.ever_played)b.push('<span class="micro-badge mb-not">Unplayed</span>');
-  else b.push('<span class="micro-badge mb-not">Not installed</span>');
-  if(g.nsfw_auto)b.push('<span class="micro-badge mb-nsfw">NSFW</span>');
-  if(g.enriched)b.push('<span class="micro-badge mb-enriched">Enriched</span>');
-  let pt=g.playtime_hours>0?g.playtime_hours+'h':'';
-  const last=g.last_played?'Last: '+g.last_played:'';
-  const ic=action==='add'?'&#8592;':'&#8594;';
+function renderList(games){
+  const list=document.getElementById('game-list');
+  if(!games.length){list.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:200px;color:var(--text-faint);font-size:.85rem">No games match current filters</div>';return}
+  // Virtual-ish rendering: just render all for now, optimize later if needed
+  list.innerHTML=games.map(g=>renderCard(g)).join('');
+}
+
+function renderCard(g){
+  const isExcl=g.excluded||g.nsfw_auto;
+  const checked=!isExcl?'checked':'';
+  const badges=[];
+  // Type badge (if not game)
+  if(g.type&&g.type!=='game') badges.push('<span class="micro m-type">'+(TYPE_LABELS[g.type]||g.type)+'</span>');
+  // Installed
+  if(g.installed_htpc) badges.push('<span class="micro m-inst">Installed</span>');
+  // NSFW
+  if(g.nsfw_auto) badges.push('<span class="micro m-nsfw">NSFW</span>');
+  // Excluded
+  if(g.excluded&&!g.nsfw_auto) badges.push('<span class="micro m-excl">Excluded</span>');
+  // Genres
+  if(g.genres&&g.genres.length) badges.push(...g.genres.slice(0,3).map(t=>'<span class="micro m-genre">'+esc(t)+'</span>'));
+  // Controller
+  if(g.controller_support&&g.controller_support!=='none') badges.push('<span class="micro m-ctrl">'+(g.controller_support==='full'?'\uD83C\uDFAE Full':'\uD83C\uDFAE Partial')+'</span>');
+  // VR
+  if(g.vr_support) badges.push('<span class="micro m-vr">\uD83E\uDD7D VR</span>');
+
   const fl=g.name.charAt(0).toUpperCase();
-  return '<div class="game-card" data-fl="'+fl+'" onclick="tog('+g.appid+',\''+action+'\')"><img class="game-thumb" src="'+g.header+'" loading="lazy" onerror="this.style.background=\'var(--border)\';this.removeAttribute(\'src\')"><div class="game-card-info"><div class="game-card-name">'+esc(g.name)+'</div><div class="game-card-meta">'+b.join('')+(pt?'<span>'+pt+'</span>':'')+(last?'<span>'+last+'</span>':'')+'</div></div><button class="game-card-action '+action+'" onclick="event.stopPropagation();tog('+g.appid+',\''+action+'\')" title="'+(action==='add'?'Include':'Exclude')+'">'+ic+'</button></div>';
+  const pt=g.playtime_hours>0?g.playtime_hours+'h':'';
+  const dev=g.developer?esc(g.developer):'';
+  const last=g.last_played||'';
+
+  let rightHtml='';
+  if(pt) rightHtml+='<span class="gc-playtime">'+pt+'</span>';
+  if(g.metacritic_score) rightHtml+='<span class="gc-score">\u2605 '+g.metacritic_score+'</span>';
+
+  let row2='';
+  if(badges.length||dev||last){
+    const parts=[...badges];
+    if(dev) parts.push('<span class="gc-dim">'+dev+'</span>');
+    if(last) parts.push('<span class="gc-dim">'+last+'</span>');
+    row2='<div class="gc-row2">'+parts.join(' ')+'</div>';
+  }
+
+  return '<div class="gc" data-fl="'+fl+'" data-appid="'+g.appid+'" ondblclick="showPreview('+g.appid+')"><input type="checkbox" class="gc-check" '+checked+' onclick="event.stopPropagation();toggleGame('+g.appid+',!this.checked)" title="'+(isExcl?'Include in screensaver':'Exclude from screensaver')+'"><img class="gc-thumb" src="'+g.header+'" loading="lazy" onerror="this.style.background=\'var(--border)\';this.removeAttribute(\'src\')"><div class="gc-body"><div class="gc-row1"><span class="gc-name" title="'+esc(g.name)+'">'+esc(g.name)+'</span><div class="gc-right">'+rightHtml+'</div></div>'+row2+'</div></div>';
 }
 
-function buildAlpha(panel,games){
-  const strip=document.getElementById('alpha-'+panel);
-  const list=document.getElementById('list-'+panel);
+function esc(s){const e=document.createElement('span');e.textContent=s;return e.innerHTML}
+
+// === TOGGLE GAME ===
+window.toggleGame=async function(appid,exclude){
+  // Optimistic UI update
+  const g=ALL.find(x=>x.appid===appid);
+  if(g) g.excluded=exclude;
+  applyView();
+  try{
+    await fetch('/api/toggle-exclusion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({appid,exclude})});
+  }catch(e){toast('Toggle failed');if(g)g.excluded=!exclude;applyView()}
+};
+
+// === BULK OPS ===
+window.bulkInclude=async function(){
+  const filtered=getFiltered();
+  const excl=filtered.filter(g=>g.excluded||g.nsfw_auto);
+  const manual=excl.filter(g=>g.excluded&&!g.nsfw_auto);
+  if(!manual.length){toast('No manually excluded games in view');return}
+  const ids=manual.map(g=>g.appid);
+  manual.forEach(g=>g.excluded=false);
+  applyView();
+  try{await fetch('/api/bulk-exclusion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({appids:ids,exclude:false})});toast(ids.length+' games included')}catch(e){toast('Failed')}
+};
+
+window.bulkExclude=async function(){
+  const filtered=getFiltered().filter(g=>!g.excluded&&!g.nsfw_auto);
+  if(!filtered.length){toast('No includable games in view');return}
+  const ids=filtered.map(g=>g.appid);
+  filtered.forEach(g=>g.excluded=true);
+  applyView();
+  try{await fetch('/api/bulk-exclusion',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({appids:ids,exclude:true})});toast(ids.length+' games excluded')}catch(e){toast('Failed')}
+};
+
+function updateBulkBar(sorted){
+  const bar=document.getElementById('bulk-bar');
+  const inc=sorted.filter(g=>!g.excluded&&!g.nsfw_auto).length;
+  const exc=sorted.filter(g=>g.excluded||g.nsfw_auto).length;
+  document.getElementById('bulk-info').textContent=sorted.length+' games shown \u2022 '+inc+' included \u2022 '+exc+' excluded';
+  bar.classList.toggle('visible',sorted.length>0);
+}
+
+// === ALPHA STRIP ===
+function updateAlpha(games){
+  const strip=document.getElementById('alpha-strip');
+  const isAlpha=sortField==='name';
+  strip.classList.toggle('hidden',!isAlpha);
+  if(!isAlpha) return;
   const letters=new Set(games.map(g=>{const c=g.name.charAt(0).toUpperCase();return /[A-Z]/.test(c)?c:'#'}));
-  strip.innerHTML=ALPHA.map(l=>'<span class="'+(letters.has(l)?'has-games':'')+'" onclick="alphaJump(\''+panel+'\',\''+l+'\')" title="'+l+'">'+l+'</span>').join('');
+  strip.innerHTML=ALPHA.map(l=>'<span class="'+(letters.has(l)?'has':'')+'" onclick="alphaJump(\''+l+'\')" title="'+l+'">'+l+'</span>').join('');
 }
 
-window.alphaJump=function(panel,letter){
-  const list=document.getElementById('list-'+panel);
-  const cards=list.querySelectorAll('.game-card');
+window.alphaJump=function(letter){
+  const list=document.getElementById('game-list');
+  const cards=list.querySelectorAll('.gc');
   for(const c of cards){
     const fl=c.dataset.fl;
     const match=letter==='#'?!/[A-Z]/i.test(fl):fl===letter;
@@ -311,24 +629,317 @@ window.alphaJump=function(panel,letter){
   }
 };
 
-function esc(s){const e=document.createElement('span');e.textContent=s;return e.innerHTML}
-
-function updateStats(){
-  const exc=ALL.filter(g=>exclSet.has(g.appid)||g.nsfw_auto);
-  const inc=ALL.filter(g=>!exclSet.has(g.appid)&&!g.nsfw_auto);
-  const nsfw=ALL.filter(g=>g.nsfw_auto);
-  const enriched=ALL.filter(g=>g.enriched);
-  document.getElementById('stat-total').textContent=ALL.length;
-  document.getElementById('stat-included').textContent=inc.length;
-  document.getElementById('stat-excluded').textContent=exc.length;
-  document.getElementById('stat-nsfw').textContent=nsfw.length;
-  document.getElementById('stat-enriched').textContent=enriched.length+'/'+ALL.length;
+function updateViewCount(n){
+  document.getElementById('view-count').textContent=n+' / '+ALL.length+' shown';
 }
 
-window.tog=function(id,action){if(action==='remove')exclSet.add(id);else exclSet.delete(id);render();debSave()};
-window.setF=function(btn,panel){btn.parentElement.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');if(panel==='inc'){incF=btn.dataset.f;renderInc()}else{excF=btn.dataset.f;renderExc()}};
-function debSave(){if(saveTO)clearTimeout(saveTO);saveTO=setTimeout(save,500)}
-async function save(){try{const r=await fetch('/api/excluded',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({excluded:Array.from(exclSet)})});if(r.ok)toast('Saved \u2014 '+exclSet.size+' excluded')}catch(e){toast('Save failed')}}
+// === STATS ===
+function updateStats(){
+  const inc=ALL.filter(g=>!g.excluded&&!g.nsfw_auto);
+  const exc=ALL.filter(g=>g.excluded||g.nsfw_auto);
+  const enriched=ALL.filter(g=>g.enriched);
+  document.getElementById('st-total').textContent=ALL.length;
+  document.getElementById('st-included').textContent=inc.length;
+  document.getElementById('st-excluded').textContent=exc.length;
+  document.getElementById('st-enriched').textContent=enriched.length+'/'+ALL.length;
+}
+
+// === SORT MENU ===
+function buildSortMenu(){
+  const menu=document.getElementById('sort-menu');
+  menu.innerHTML=SORT_OPTIONS.map(o=>
+    '<div class="sort-opt'+(o.field===sortField&&o.dir===sortDir?' active':'')+'" onclick="setSort(\''+o.field+'\',\''+o.dir+'\')">'+o.label+'</div>'
+  ).join('');
+}
+
+window.toggleSortMenu=function(){document.getElementById('sort-menu').classList.toggle('open')};
+window.setSort=function(f,d){
+  sortField=f; sortDir=d;
+  document.getElementById('sort-label').textContent=SORT_OPTIONS.find(o=>o.field===f&&o.dir===d)?.label||'Custom';
+  document.getElementById('sort-menu').classList.remove('open');
+  buildSortMenu(); applyView();
+};
+
+// === QUICK CHIPS ===
+function renderQuickChips(){
+  const cont=document.getElementById('quick-chips');
+  const chips=[
+    {id:'qi',label:'Included',active:filters.included==='included',toggle:()=>{filters.included=filters.included==='included'?'all':'included'}},
+    {id:'qe',label:'Excluded',active:filters.included==='excluded',toggle:()=>{filters.included=filters.included==='excluded'?'all':'excluded'}},
+    {id:'qinst',label:'Installed',active:filters.installed==='yes',toggle:()=>{filters.installed=filters.installed==='yes'?'all':'yes'}},
+    {id:'qplay',label:'Played',active:filters.played==='played',toggle:()=>{filters.played=filters.played==='played'?'all':'played'}},
+    {id:'qnever',label:'Unplayed',active:filters.played==='never',toggle:()=>{filters.played=filters.played==='never'?'all':'never'}},
+  ];
+  cont.innerHTML=chips.map(c=>'<span class="chip'+(c.active?' active':'')+'" onclick="quickChip(\''+c.id+'\')">'+c.label+'</span>').join('');
+  // Store toggle handlers
+  cont._chips=chips;
+}
+
+window.quickChip=function(id){
+  const cont=document.getElementById('quick-chips');
+  const chip=cont._chips.find(c=>c.id===id);
+  if(chip){
+    // Mutual exclusion for included/excluded
+    if(id==='qi'&&filters.included==='excluded') filters.included='all';
+    if(id==='qe'&&filters.included==='included') filters.included='all';
+    // Mutual exclusion for played/unplayed
+    if(id==='qplay'&&filters.played==='never') filters.played='all';
+    if(id==='qnever'&&filters.played==='played') filters.played='all';
+    chip.toggle();
+    renderQuickChips(); applyView();
+  }
+};
+
+// === FILTER PANEL ===
+function buildFilterPanel(){
+  const body=document.getElementById('filter-body');
+  const types=FVALS.types||['game'];
+  const genres=FVALS.genres||[];
+  const devs=FVALS.developers||[];
+
+  let h='';
+  // Content Type
+  h+='<div class="fp-section"><div class="fp-label">Content Type</div><div class="fp-row" id="fp-types">';
+  types.forEach(t=>{h+='<label class="fp-check"><input type="checkbox" value="'+t+'" '+(filters.type.includes(t)?'checked':'')+' onchange="fpTypeChange()"> '+(TYPE_LABELS[t]||t)+'</label>'});
+  h+='</div></div>';
+  // Included
+  h+='<div class="fp-section"><div class="fp-label">Screensaver Status</div><div class="fp-row">'+triBtn('fp-included',filters.included,[['all','All'],['included','Included'],['excluded','Excluded']])+'</div></div>';
+  // Installed
+  h+='<div class="fp-section"><div class="fp-label">Installed</div><div class="fp-row">'+triBtn('fp-installed',filters.installed,[['all','All'],['yes','Yes'],['no','No']])+'</div></div>';
+  // Played
+  h+='<div class="fp-section"><div class="fp-label">Play Status</div><div class="fp-row">'+triBtn('fp-played',filters.played,[['all','All'],['played','Played'],['never','Never']])+'</div></div>';
+  // NSFW
+  h+='<div class="fp-section"><div class="fp-label">NSFW</div><div class="fp-row">'+triBtn('fp-nsfw',filters.nsfw,[['hide','Hide'],['show','Show All'],['only','Only NSFW']])+'</div></div>';
+  // Enriched
+  h+='<div class="fp-section"><div class="fp-label">Enrichment</div><div class="fp-row">'+triBtn('fp-enriched',filters.enriched,[['all','All'],['yes','Enriched'],['no','Not Enriched']])+'</div></div>';
+  // Playtime
+  h+='<div class="fp-section"><div class="fp-label">Playtime (hours)</div><div class="fp-row"><div class="fp-range"><input type="number" id="fp-pt-min" min="0" step="1" placeholder="Min" value="'+(filters.playtime_min!=null?filters.playtime_min:'')+'"><span>\u2014</span><input type="number" id="fp-pt-max" min="0" step="1" placeholder="Max" value="'+(filters.playtime_max!=null?filters.playtime_max:'')+'"></div></div></div>';
+  // Metacritic
+  h+='<div class="fp-section"><div class="fp-label">Metacritic Score</div><div class="fp-row"><div class="fp-range"><input type="number" id="fp-mc-min" min="0" max="100" step="1" placeholder="Min" value="'+(filters.metacritic_min!=null?filters.metacritic_min:'')+'"><span>\u2014</span><input type="number" id="fp-mc-max" min="0" max="100" step="1" placeholder="Max" value="'+(filters.metacritic_max!=null?filters.metacritic_max:'')+'"></div></div></div>';
+  // Genres
+  if(genres.length){
+    h+='<div class="fp-section"><div class="fp-label">Genres</div><div class="fp-row" id="fp-genres" style="max-height:100px;overflow-y:auto;flex-direction:column;align-items:flex-start;gap:2px">';
+    genres.forEach(g=>{h+='<label class="fp-check"><input type="checkbox" value="'+esc(g)+'" '+(filters.genres.includes(g)?'checked':'')+' onchange="fpGenreChange()"> '+esc(g)+'</label>'});
+    h+='</div></div>';
+  }
+  // Developer
+  if(devs.length){
+    h+='<div class="fp-section"><div class="fp-label">Developer</div><div class="fp-row"><input type="text" id="fp-dev" placeholder="Search developer..." value="'+esc(filters.developer)+'" style="background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-size:.78rem;width:250px;outline:none"></div></div>';
+  }
+  // Controller
+  h+='<div class="fp-section"><div class="fp-label">Controller Support</div><div class="fp-row" id="fp-ctrl">';
+  ['none','partial','full'].forEach(v=>{h+='<label class="fp-check"><input type="checkbox" value="'+v+'" '+(filters.controller.includes(v)?'checked':'')+' onchange="fpCtrlChange()"> '+v.charAt(0).toUpperCase()+v.slice(1)+'</label>'});
+  h+='</div></div>';
+  // VR
+  h+='<div class="fp-section"><div class="fp-label">VR Support</div><div class="fp-row">'+triBtn('fp-vr',filters.vr,[['all','All'],['yes','VR Only'],['no','No VR']])+'</div></div>';
+  // Platforms
+  h+='<div class="fp-section"><div class="fp-label">Native Platforms</div><div class="fp-row" id="fp-plat">';
+  ['windows','linux','mac'].forEach(p=>{h+='<label class="fp-check"><input type="checkbox" value="'+p+'" '+(filters.platforms.includes(p)?'checked':'')+' onchange="fpPlatChange()"> '+p.charAt(0).toUpperCase()+p.slice(1)+'</label>'});
+  h+='</div></div>';
+  // Free
+  h+='<div class="fp-section"><div class="fp-label">Price</div><div class="fp-row">'+triBtn('fp-free',filters.free,[['all','All'],['yes','Free Only'],['no','Paid Only']])+'</div></div>';
+  // Release Year
+  h+='<div class="fp-section"><div class="fp-label">Release Year</div><div class="fp-row"><div class="fp-range"><input type="number" id="fp-yr-min" min="1980" max="2030" step="1" placeholder="From" value="'+(filters.release_year_min!=null?filters.release_year_min:'')+'"><span>\u2014</span><input type="number" id="fp-yr-max" min="1980" max="2030" step="1" placeholder="To" value="'+(filters.release_year_max!=null?filters.release_year_max:'')+'"></div></div></div>';
+
+  body.innerHTML=h;
+}
+
+function triBtn(group,current,opts){
+  return '<div class="fp-tri">'+opts.map(([v,l])=>'<button class="'+(current===v?'active':'')+'" onclick="fpTri(\''+group+'\',\''+v+'\')">'+l+'</button>').join('')+'</div>';
+}
+
+window.fpTri=function(group,val){
+  const map={
+    'fp-included':'included','fp-installed':'installed','fp-played':'played',
+    'fp-nsfw':'nsfw','fp-enriched':'enriched','fp-vr':'vr','fp-free':'free'
+  };
+  const key=map[group];
+  if(key){filters[key]=val; buildFilterPanel(); renderQuickChips()}
+};
+
+window.fpTypeChange=function(){
+  filters.type=Array.from(document.querySelectorAll('#fp-types input:checked')).map(i=>i.value);
+};
+window.fpGenreChange=function(){
+  filters.genres=Array.from(document.querySelectorAll('#fp-genres input:checked')).map(i=>i.value);
+};
+window.fpCtrlChange=function(){
+  filters.controller=Array.from(document.querySelectorAll('#fp-ctrl input:checked')).map(i=>i.value);
+};
+window.fpPlatChange=function(){
+  filters.platforms=Array.from(document.querySelectorAll('#fp-plat input:checked')).map(i=>i.value);
+};
+
+window.openFilters=function(){
+  // Read current filter state into panel
+  buildFilterPanel(); renderQuickChips();
+  document.getElementById('filter-overlay').classList.add('open');
+};
+window.closeFilters=function(){
+  // Read values from panel into filters
+  const ptMin=document.getElementById('fp-pt-min')?.value;
+  const ptMax=document.getElementById('fp-pt-max')?.value;
+  filters.playtime_min=ptMin?parseFloat(ptMin):null;
+  filters.playtime_max=ptMax?parseFloat(ptMax):null;
+  const mcMin=document.getElementById('fp-mc-min')?.value;
+  const mcMax=document.getElementById('fp-mc-max')?.value;
+  filters.metacritic_min=mcMin?parseInt(mcMin):null;
+  filters.metacritic_max=mcMax?parseInt(mcMax):null;
+  filters.developer=document.getElementById('fp-dev')?.value||'';
+  const yrMin=document.getElementById('fp-yr-min')?.value;
+  const yrMax=document.getElementById('fp-yr-max')?.value;
+  filters.release_year_min=yrMin?parseInt(yrMin):null;
+  filters.release_year_max=yrMax?parseInt(yrMax):null;
+  document.getElementById('filter-overlay').classList.remove('open');
+  applyView();
+};
+
+window.resetFilters=function(){
+  filters={type:['game'],included:'all',installed:'all',played:'all',nsfw:'hide',enriched:'all',
+    playtime_min:null,playtime_max:null,metacritic_min:null,metacritic_max:null,
+    genres:[],developer:'',controller:[],vr:'all',platforms:[],free:'all',
+    release_year_min:null,release_year_max:null};
+  document.getElementById('search').value='';
+  buildFilterPanel(); renderQuickChips();
+};
+
+function updateFilterBadge(){
+  let count=0;
+  if(filters.type.length>0 && !(filters.type.length===1 && filters.type[0]==='game')) count++;
+  if(filters.included!=='all') count++;
+  if(filters.installed!=='all') count++;
+  if(filters.played!=='all') count++;
+  if(filters.nsfw!=='hide') count++;
+  if(filters.enriched!=='all') count++;
+  if(filters.playtime_min!=null||filters.playtime_max!=null) count++;
+  if(filters.metacritic_min!=null||filters.metacritic_max!=null) count++;
+  if(filters.genres.length) count++;
+  if(filters.developer) count++;
+  if(filters.controller.length) count++;
+  if(filters.vr!=='all') count++;
+  if(filters.platforms.length) count++;
+  if(filters.free!=='all') count++;
+  if(filters.release_year_min!=null||filters.release_year_max!=null) count++;
+  const badge=document.getElementById('filter-count-badge');
+  badge.textContent=count>0?'('+count+')':'';
+  badge.style.color=count>0?'var(--accent)':'';
+}
+
+// === PRESETS ===
+function renderPresets(){
+  const list=document.getElementById('preset-list');
+  list.innerHTML=PRESETS.map(p=>{
+    const active=p.name===activePresetName;
+    const del=p.is_builtin?'':'<span class="del" onclick="event.stopPropagation();deletePreset('+p.id+')">\u2715</span>';
+    return '<div class="preset-item'+(active?' active':'')+'" onclick="loadPreset('+p.id+')"><span>'+esc(p.name)+(p.is_builtin?' \u2605':'')+'</span>'+del+'</div>';
+  }).join('');
+}
+
+window.togglePresetMenu=function(){document.getElementById('preset-menu').classList.toggle('open')};
+
+window.loadPreset=function(id){
+  const p=PRESETS.find(x=>x.id===id);
+  if(!p) return;
+  loadPresetData(p);
+  document.getElementById('preset-menu').classList.remove('open');
+};
+
+function loadPresetByName(name){
+  const p=PRESETS.find(x=>x.name===name);
+  if(p) loadPresetData(p);
+}
+
+function loadPresetData(p){
+  activePresetName=p.name;
+  document.getElementById('preset-active-name').textContent=p.name;
+  // Apply filters
+  const f=p.filters||{};
+  filters={
+    type:f.type||['game'], included:f.included||'all', installed:f.installed||'all',
+    played:f.played||'all', nsfw:f.nsfw||'hide', enriched:f.enriched||'all',
+    playtime_min:f.playtime_min!=null?f.playtime_min:null,
+    playtime_max:f.playtime_max!=null?f.playtime_max:null,
+    metacritic_min:f.metacritic_min!=null?f.metacritic_min:null,
+    metacritic_max:f.metacritic_max!=null?f.metacritic_max:null,
+    genres:f.genres||[], developer:f.developer||'',
+    controller:f.controller||[], vr:f.vr||'all',
+    platforms:f.platforms||[], free:f.free||'all',
+    release_year_min:f.release_year_min!=null?f.release_year_min:null,
+    release_year_max:f.release_year_max!=null?f.release_year_max:null
+  };
+  sortField=p.sort_field||'name';
+  sortDir=p.sort_dir||'asc';
+  document.getElementById('search').value='';
+  document.getElementById('sort-label').textContent=SORT_OPTIONS.find(o=>o.field===sortField&&o.dir===sortDir)?.label||'Custom';
+  buildSortMenu(); renderQuickChips(); renderPresets(); applyView();
+}
+
+window.saveCurrentPreset=async function(){
+  const name=document.getElementById('preset-name-input').value.trim();
+  if(!name){toast('Enter a name');return}
+  try{
+    const r=await fetch('/api/presets',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      name, filters, sort_field:sortField, sort_dir:sortDir
+    })});
+    const d=await r.json();
+    if(d.ok){
+      PRESETS=await fetch('/api/presets').then(r=>r.json());
+      activePresetName=name;
+      document.getElementById('preset-active-name').textContent=name;
+      renderPresets();
+      document.getElementById('preset-name-input').value='';
+      toast('Preset "'+name+'" saved');
+    }
+  }catch(e){toast('Save failed')}
+};
+
+window.deletePreset=async function(id){
+  try{
+    await fetch('/api/presets/'+id,{method:'DELETE'});
+    PRESETS=await fetch('/api/presets').then(r=>r.json());
+    renderPresets();
+    toast('Preset deleted');
+  }catch(e){toast('Delete failed')}
+};
+
+// === PREVIEW ===
+window.showPreview=function(appid){
+  const g=ALL.find(x=>x.appid===appid);
+  if(!g) return;
+  const card=document.getElementById('preview-card');
+  const badges=[];
+  if(g.type&&g.type!=='game') badges.push('<span class="micro m-type" style="font-size:.78rem;padding:3px 8px">'+(TYPE_LABELS[g.type]||g.type)+'</span>');
+  if(g.installed_htpc) badges.push('<span class="micro m-inst" style="font-size:.78rem;padding:3px 8px">Installed</span>');
+  if(g.nsfw_auto) badges.push('<span class="micro m-nsfw" style="font-size:.78rem;padding:3px 8px">NSFW</span>');
+  if(g.genres) g.genres.slice(0,5).forEach(t=>badges.push('<span class="micro m-genre" style="font-size:.78rem;padding:3px 8px">'+esc(t)+'</span>'));
+  if(g.metacritic_score) badges.push('<span class="gc-score" style="font-size:.82rem;padding:3px 8px">\u2605 '+g.metacritic_score+'</span>');
+
+  let details='';
+  if(g.developer) details+='<dt>Developer</dt><dd>'+esc(g.developer)+'</dd>';
+  if(g.publisher) details+='<dt>Publisher</dt><dd>'+esc(g.publisher)+'</dd>';
+  if(g.release_date) details+='<dt>Release</dt><dd>'+esc(g.release_date)+'</dd>';
+  details+='<dt>Playtime</dt><dd>'+(g.playtime_hours>0?g.playtime_hours+'h':'Never played')+'</dd>';
+  if(g.last_played) details+='<dt>Last Played</dt><dd>'+g.last_played+'</dd>';
+  if(g.primary_device) details+='<dt>Primary Device</dt><dd>'+g.primary_device+'</dd>';
+  if(g.controller_support&&g.controller_support!=='none') details+='<dt>Controller</dt><dd>'+g.controller_support+'</dd>';
+  if(g.vr_support) details+='<dt>VR</dt><dd>Supported</dd>';
+  if(g.native_platforms){
+    const pp=[];
+    if(g.native_platforms.windows) pp.push('Windows');
+    if(g.native_platforms.linux) pp.push('Linux');
+    if(g.native_platforms.mac) pp.push('Mac');
+    if(pp.length) details+='<dt>Platforms</dt><dd>'+pp.join(', ')+'</dd>';
+  }
+
+  const isExcl=g.excluded||g.nsfw_auto;
+  const toggleLabel=isExcl?'\u2713 Include in Screensaver':'\u2717 Exclude from Screensaver';
+  const toggleClass=isExcl?'btn-green':'btn-red';
+
+  card.innerHTML='<img class="preview-hero" src="'+g.hero_2x+'" onerror="this.src=\''+g.hero_1x+'\'"><div class="preview-body"><div class="preview-name">'+esc(g.name)+'</div><div class="preview-meta">'+badges.join('')+'</div>'+(g.short_description?'<div class="preview-desc">'+esc(g.short_description)+'</div>':'')+'<dl class="preview-details">'+details+'</dl><div class="preview-actions"><button class="btn '+toggleClass+'" onclick="toggleGame('+g.appid+','+(!isExcl)+');closePreview()">'+toggleLabel+'</button><a class="btn" href="'+g.store_url+'" target="_blank">Steam Store \u2197</a><button class="btn" onclick="closePreview()">Close</button></div></div>';
+  document.getElementById('preview-overlay').classList.add('open');
+};
+
+window.closePreview=function(){document.getElementById('preview-overlay').classList.remove('open')};
 
 // === TABS ===
 window.switchTab=function(t){
@@ -338,39 +949,48 @@ window.switchTab=function(t){
 };
 
 // === DISPLAY TAB ===
+const ELEMENTS=[
+  {id:'installed_badge',icon:'\u2705',name:'Install Status',desc:'Shows whether the game is installed locally',example:'\u2713 Installed / Not installed',cat:'basic'},
+  {id:'playtime',icon:'\u23F1',name:'Playtime',desc:'Total hours played across all platforms',example:'142.3h played',cat:'basic'},
+  {id:'device_breakdown',icon:'\uD83D\uDCBB',name:'Device Breakdown',desc:'Hours split by PC, Deck, Linux, Mac',example:'PC 98h \u00b7 Deck 44h',cat:'basic'},
+  {id:'last_played',icon:'\uD83D\uDCC5',name:'Last Played',desc:'Date the game was last launched',example:'Last: 2025-12-15',cat:'basic'},
+  {id:'genres',icon:'\uD83C\uDFAD',name:'Genre Tags',desc:'Up to 3 genre tags from Steam store',example:'Action \u00b7 RPG \u00b7 Open World',cat:'enriched'},
+  {id:'developer',icon:'\uD83D\uDEE0',name:'Developer',desc:'Game developer/studio name',example:'CD Projekt Red',cat:'enriched'},
+  {id:'metacritic',icon:'\u2B50',name:'Metacritic Score',desc:'Metacritic review score',example:'\u2605 94',cat:'enriched'},
+  {id:'release_date',icon:'\uD83D\uDCC6',name:'Release Date',desc:'Original release date',example:'Dec 10, 2020',cat:'enriched'},
+  {id:'description',icon:'\uD83D\uDCDD',name:'Short Description',desc:'One-liner from the store page',example:'An open-world action adventure...',cat:'enriched'},
+  {id:'controller',icon:'\uD83C\uDFAE',name:'Controller Support',desc:'Full or partial controller',example:'\uD83C\uDFAE Full Controller',cat:'enriched'},
+  {id:'vr_support',icon:'\uD83E\uDD7D',name:'VR Support',desc:'VR headset support badge',example:'\uD83E\uDD7D VR Supported',cat:'enriched'},
+  {id:'platforms',icon:'\uD83D\uDDA5',name:'Native Platforms',desc:'Which platforms run natively',example:'Win / Linux / Mac',cat:'enriched'}
+];
+
 function renderDisplay(){
   const list=document.getElementById('display-list');
   const elCfg=CONFIG.display_elements||[];
   const cfgMap=Object.fromEntries(elCfg.map(e=>[e.id,e]));
-  // Merge definitions with config
   const merged=ELEMENTS.map(def=>{
     const cfg=cfgMap[def.id]||{enabled:true,order:999};
     return {...def,enabled:cfg.enabled,order:cfg.order};
   }).sort((a,b)=>a.order-b.order);
-
   const basic=merged.filter(e=>e.cat==='basic');
   const enriched=merged.filter(e=>e.cat==='enriched');
-
-  let html='<div class="section-title">&#128218; Basic Info (from Steam library)</div>';
-  html+=basic.map((e,i)=>deCard(e,i,'basic')).join('');
-  html+='<div class="section-title">&#128640; Enriched Data <span class="de-badge de-badge-enriched">requires Steam enrichment</span></div>';
-  html+=enriched.map((e,i)=>deCard(e,i+basic.length,'enriched')).join('');
+  let html='<div class="section-title">&#128218; Basic Info</div>';
+  html+=basic.map(e=>deCard(e)).join('');
+  html+='<div class="section-title">&#128640; Enriched Data <span class="de-badge de-badge-enriched">requires enrichment</span></div>';
+  html+=enriched.map(e=>deCard(e)).join('');
   list.innerHTML=html;
 }
 
-function deCard(e,idx,cat){
-  const disClass=e.enabled?'':'disabled';
-  return '<div class="de-card '+disClass+'" id="de-'+e.id+'"><div class="de-icon">'+e.icon+'</div><div class="de-info"><div class="de-name">'+e.name+(e.cat==='enriched'?' <span class="de-badge de-badge-enriched">enriched</span>':'')+'</div><div class="de-desc">'+e.desc+'</div><div class="de-example">'+e.example+'</div></div><div class="de-controls"><div class="de-arrows"><button class="de-arrow" onclick="moveDE(\''+e.id+'\',-1)" title="Move up">&#9650;</button><button class="de-arrow" onclick="moveDE(\''+e.id+'\',1)" title="Move down">&#9660;</button></div><label class="toggle"><input type="checkbox" '+(e.enabled?'checked':'')+' onchange="toggleDE(\''+e.id+'\',this.checked)"><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div></div>';
+function deCard(e){
+  return '<div class="de-card '+(e.enabled?'':'disabled')+'"><div class="de-icon">'+e.icon+'</div><div class="de-info"><div class="de-name">'+e.name+(e.cat==='enriched'?' <span class="de-badge de-badge-enriched">enriched</span>':'')+'</div><div class="de-desc">'+e.desc+'</div><div class="de-example">'+e.example+'</div></div><div class="de-controls"><div class="de-arrows"><button class="de-arrow" onclick="moveDE(\''+e.id+'\',-1)" title="Up">&#9650;</button><button class="de-arrow" onclick="moveDE(\''+e.id+'\',1)" title="Down">&#9660;</button></div><label class="toggle"><input type="checkbox" '+(e.enabled?'checked':'')+' onchange="toggleDE(\''+e.id+'\',this.checked)"><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div></div>';
 }
 
 window.toggleDE=function(id,enabled){
   const els=CONFIG.display_elements||[];
   const el=els.find(e=>e.id===id);
-  if(el)el.enabled=enabled;
-  else els.push({id,enabled,order:els.length});
+  if(el)el.enabled=enabled; else els.push({id,enabled,order:els.length});
   CONFIG.display_elements=els;
-  saveConfig({display_elements:els});
-  renderDisplay();
+  saveConfig({display_elements:els}); renderDisplay();
 };
 
 window.moveDE=function(id,dir){
@@ -379,19 +999,16 @@ window.moveDE=function(id,dir){
   if(idx<0)return;
   const swapIdx=idx+dir;
   if(swapIdx<0||swapIdx>=els.length)return;
-  const tmpO=els[idx].order;
-  els[idx].order=els[swapIdx].order;
-  els[swapIdx].order=tmpO;
+  const t=els[idx].order;els[idx].order=els[swapIdx].order;els[swapIdx].order=t;
   CONFIG.display_elements=els;
-  saveConfig({display_elements:els});
-  renderDisplay();
+  saveConfig({display_elements:els}); renderDisplay();
 };
 
 async function saveConfig(updates){
-  try{await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(updates)});toast('Settings saved')}catch(e){toast('Save failed')}
+  try{await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(updates)});toast('Saved')}catch(e){toast('Save failed')}
 }
 
-// === SETTINGS TAB ===
+// === SETTINGS ===
 function loadSettings(){
   document.getElementById('s-idle').value=CONFIG.screensaver_after_seconds||120;
   document.getElementById('s-slide').value=CONFIG.screensaver_slide_duration_seconds||12;
@@ -414,6 +1031,21 @@ window.saveSettings=async function(){
   await saveConfig(u);
 };
 
+// === SCREENSAVER TYPES CONFIG ===
+function renderSSTypes(){
+  const cont=document.getElementById('ss-types');
+  const types=FVALS.types||['game'];
+  const active=CONFIG.screensaver_types||['game'];
+  cont.innerHTML=types.map(t=>'<label><input type="checkbox" value="'+t+'" '+(active.includes(t)?'checked':'')+'> '+(TYPE_LABELS[t]||t)+'</label>').join('');
+}
+
+window.saveSSTypes=async function(){
+  const checked=Array.from(document.querySelectorAll('#ss-types input:checked')).map(i=>i.value);
+  if(!checked.length){toast('Select at least one type');return}
+  CONFIG.screensaver_types=checked;
+  await saveConfig({screensaver_types:checked});
+};
+
 // === ENRICHMENT ===
 window.startEnrichment=async function(){
   try{const r=await fetch('/api/enrichment/start',{method:'POST'});const d=await r.json();if(d.ok){toast('Enrichment started');startEnrichPoll()}else toast(d.error||'Failed')}catch(e){toast('Failed')}
@@ -421,7 +1053,6 @@ window.startEnrichment=async function(){
 window.stopEnrichment=async function(){
   try{await fetch('/api/enrichment/stop',{method:'POST'});toast('Stopping...')}catch(e){}
 };
-
 function startEnrichPoll(){if(enrichPoll)return;enrichPoll=setInterval(pollEnrichment,2000)}
 function stopEnrichPoll(){if(enrichPoll){clearInterval(enrichPoll);enrichPoll=null}}
 
@@ -434,62 +1065,86 @@ async function pollEnrichment(){
     const startBtn=document.getElementById('enrich-start-btn');
     const stopBtn=document.getElementById('enrich-stop-btn');
     if(s.running||s.phase==='running'||s.phase==='rate_limited'||s.phase==='starting'){
-      startBtn.style.display='none'; stopBtn.style.display='';
-      det.style.display='flex';
+      startBtn.style.display='none';stopBtn.style.display='';det.style.display='flex';
       const pct=s.total>0?((s.completed/s.total)*100):0;
       bar.style.width=pct+'%';
       bar.className='progress-fill'+(s.phase==='rate_limited'?' rate-limited':'');
       document.getElementById('ed-count').textContent=s.completed+'/'+s.total;
       document.getElementById('ed-current').textContent=s.current_game||'-';
-      document.getElementById('ed-eta').textContent=s.eta_seconds>0?formatTime(s.eta_seconds):'-';
+      document.getElementById('ed-eta').textContent=s.eta_seconds>0?fmtTime(s.eta_seconds):'-';
       document.getElementById('ed-errors').textContent=s.errors;
       document.getElementById('ed-skipped').textContent=s.skipped;
       startEnrichPoll();
-    } else {
-      startBtn.style.display=''; stopBtn.style.display='none';
+    }else{
+      startBtn.style.display='';stopBtn.style.display='none';
       if(s.phase==='complete'){
-        bar.style.width='100%'; bar.className='progress-fill complete';
-        det.style.display='flex'; stopEnrichPoll();
-        // Reload games to get enriched data
-        const gr=await fetch('/api/games'); ALL=await gr.json(); render(); updateStats();
-      } else if(s.phase==='error'||s.phase==='stopped'){
-        bar.className='progress-fill'+(s.phase==='error'?' error':'');
-        stopEnrichPoll();
-      } else { stopEnrichPoll(); }
+        bar.style.width='100%';bar.className='progress-fill complete';
+        det.style.display='flex';stopEnrichPoll();
+        ALL=await fetch('/api/games').then(r=>r.json());
+        FVALS=await fetch('/api/filter-values').then(r=>r.json());
+        applyView();updateStats();buildFilterPanel();renderSSTypes();
+      }else if(s.phase==='error'||s.phase==='stopped'){
+        bar.className='progress-fill'+(s.phase==='error'?' error':'');stopEnrichPoll();
+      }else{stopEnrichPoll()}
     }
     msg.textContent=s.message||'';
   }catch(e){}
 }
 
-function formatTime(s){const m=Math.floor(s/60);const sec=s%60;return m>0?m+'m '+sec+'s':sec+'s'}
+function fmtTime(s){const m=Math.floor(s/60);const sec=s%60;return m>0?m+'m '+sec+'s':sec+'s'}
 
 // === DATA MANAGEMENT ===
 window.exportSettings=function(){
-  const data={config:CONFIG,excluded:Array.from(exclSet),exported_at:new Date().toISOString(),version:'2.0'};
+  const data={config:CONFIG,excluded:ALL.filter(g=>g.excluded).map(g=>g.appid),exported_at:new Date().toISOString(),version:'2.0'};
   dl('screensaver-settings.json',JSON.stringify(data,null,2));
 };
 window.importSettings=async function(e){
-  const file=e.target.files[0]; if(!file)return;
+  const file=e.target.files[0];if(!file)return;
   try{
-    const text=await file.text(); const data=JSON.parse(text);
+    const text=await file.text();const data=JSON.parse(text);
     if(data.config){Object.assign(CONFIG,data.config);await saveConfig(data.config);loadSettings();renderDisplay()}
-    if(data.excluded){exclSet=new Set(data.excluded);await fetch('/api/excluded',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({excluded:data.excluded})});render()}
+    if(data.excluded){
+      await fetch('/api/excluded',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({excluded:data.excluded})});
+      ALL=await fetch('/api/games').then(r=>r.json());applyView()
+    }
     toast('Settings imported');
   }catch(err){toast('Import failed: '+err.message)}
   e.target.value='';
 };
-window.exportGameData=function(){
-  dl('screensaver-games.json',JSON.stringify(ALL,null,2));
-};
+window.exportGameData=function(){dl('screensaver-games.json',JSON.stringify(ALL,null,2))};
 window.refreshLibrary=async function(){
   toast('Refreshing from Steam...');
-  try{const r=await fetch('/api/refresh-library',{method:'POST'});const d=await r.json();if(d.ok){toast('Refreshed \u2014 '+d.count+' games');const gr=await fetch('/api/games');ALL=await gr.json();render()}else toast('Failed')}catch(e){toast('Refresh failed')}
+  try{
+    const r=await fetch('/api/refresh-library',{method:'POST'});const d=await r.json();
+    if(d.ok){
+      toast('Refreshed \u2014 '+d.count+' games');
+      ALL=await fetch('/api/games').then(r=>r.json());
+      FVALS=await fetch('/api/filter-values').then(r=>r.json());
+      applyView();updateStats();buildFilterPanel();
+    }else toast('Failed')
+  }catch(e){toast('Refresh failed')}
 };
 function dl(name,content){const b=new Blob([content],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=name;a.click();URL.revokeObjectURL(u)}
 
-window.openScreensaver=function(){window.open('/screensaver','_blank')};
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('visible');setTimeout(()=>t.classList.remove('visible'),2500)}
 
+// Close menus on outside click
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.sort-wrap')) document.getElementById('sort-menu').classList.remove('open');
+  if(!e.target.closest('.preset-wrap')) document.getElementById('preset-menu').classList.remove('open');
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    closeFilters(); closePreview();
+    document.getElementById('sort-menu').classList.remove('open');
+    document.getElementById('preset-menu').classList.remove('open');
+  }
+  if(e.key==='/' && !e.target.matches('input')){e.preventDefault();document.getElementById('search').focus()}
+});
+
+renderQuickChips();
 init();
 })();
 </script>

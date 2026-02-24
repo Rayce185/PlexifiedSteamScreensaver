@@ -145,9 +145,8 @@
       buildKB(CONFIG.ken_burns_intensity||0.7);
       enabledElements=(CONFIG.display_elements||[]).filter(e=>e.enabled).sort((a,b)=>a.order-b.order).map(e=>e.id);
       const gr=await fetch('/api/games'); const all=await gr.json();
-      const er=await fetch('/api/excluded'); const ed=await er.json();
-      const excl=new Set(ed.excluded||[]);
-      let eligible=all.filter(g=>!excl.has(g.appid)&&!g.nsfw_auto);
+      const ssTypes=CONFIG.screensaver_types||['game'];
+      let eligible=all.filter(g=>!g.excluded&&!g.nsfw_auto&&ssTypes.includes(g.type||'game'));
       for(let i=eligible.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[eligible[i],eligible[j]]=[eligible[j],eligible[i]]}
       games=eligible;
       if(!games.length){document.getElementById('loading').textContent='NO GAMES';return}

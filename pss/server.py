@@ -13,8 +13,10 @@ import uvicorn
 from pss.database import (
     init_db, get_active_account, upsert_account, get_games, upsert_games,
     upsert_enrichment, get_unenriched_appids, get_enrichment_count,
-    get_exclusions, set_exclusions, get_full_config, get_config,
-    set_config, set_display_elements, MUTABLE_CONFIG_KEYS
+    get_exclusions, set_exclusions, toggle_exclusion, bulk_set_exclusions,
+    get_full_config, get_config, set_config, set_display_elements,
+    get_presets, save_preset, delete_preset, get_distinct_values,
+    MUTABLE_CONFIG_KEYS
 )
 
 PSS_ROOT = Path(__file__).parent.parent
@@ -86,8 +88,6 @@ def parse_loginusers_vdf() -> tuple[str, str] | tuple[None, None]:
         return None, None
     try:
         text = vdf_path.read_text(encoding="utf-8", errors="ignore")
-        # Find the most recently logged-in user (MostRecent=1)
-        # VDF is a simple nested key-value format
         current_id = None
         current_name = None
         best_id = None
@@ -95,7 +95,6 @@ def parse_loginusers_vdf() -> tuple[str, str] | tuple[None, None]:
         most_recent = False
         for line in text.splitlines():
             line = line.strip().strip('"')
-            # SteamID64 lines are bare numbers as keys
             if re.match(r"^7656\d{13}$", line):
                 if current_id and most_recent:
                     best_id, best_name = current_id, current_name
@@ -109,10 +108,8 @@ def parse_loginusers_vdf() -> tuple[str, str] | tuple[None, None]:
             elif '"MostRecent"' in line or '"mostrecent"' in line:
                 if '"1"' in line:
                     most_recent = True
-        # Check last entry
         if current_id and most_recent:
             best_id, best_name = current_id, current_name
-        # If no MostRecent flag found, use first account
         if not best_id and current_id:
             best_id = current_id
             best_name = current_name
@@ -280,13 +277,11 @@ async def lifespan(app):
     STEAM_PATH = config.get("steam_path", STEAM_PATH)
     account = get_active_account()
     if not account and STEAM_API_KEY:
-        # First run: detect Steam account and auto-fetch library
         steamid, persona = parse_loginusers_vdf()
         if steamid:
             upsert_account(steamid, persona_name=persona or "Owner", is_active=True)
             account = get_active_account()
             log.info(f"Auto-created account: {steamid} ({persona or 'Owner'})")
-            # Fetch library on first run
             games = fetch_steam_library(STEAM_API_KEY, steamid)
             if games:
                 count = upsert_games(steamid, games)
@@ -301,9 +296,11 @@ async def lifespan(app):
     log.info("PSS server shutting down")
 
 
-app = FastAPI(title="PSS", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="PSS", version="0.2.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+
+# === PAGE ROUTES ===
 
 @app.get("/")
 async def root():
@@ -320,6 +317,9 @@ async def customizer():
     p = WEB_DIR / "customizer.html"
     if not p.exists(): return HTMLResponse("Not found", status_code=404)
     return HTMLResponse(content=p.read_text(encoding="utf-8"), headers={"Cache-Control": "no-cache"})
+
+
+# === GAMES API ===
 
 @app.get("/api/games")
 async def api_games():
@@ -343,6 +343,34 @@ async def api_excluded_post(request: Request):
     log.info(f"Exclusion list updated: {count} excluded")
     return JSONResponse({"ok": True, "count": count})
 
+@app.post("/api/toggle-exclusion")
+async def api_toggle_exclusion(request: Request):
+    acct = get_active_account()
+    if not acct: return JSONResponse({"error": "No active account"}, status_code=400)
+    try: data = await request.json()
+    except: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    appid = data.get("appid")
+    exclude = data.get("exclude", True)
+    if appid is None: return JSONResponse({"error": "Missing appid"}, status_code=400)
+    toggle_exclusion(acct["steamid64"], appid, exclude)
+    return JSONResponse({"ok": True, "appid": appid, "excluded": exclude})
+
+@app.post("/api/bulk-exclusion")
+async def api_bulk_exclusion(request: Request):
+    acct = get_active_account()
+    if not acct: return JSONResponse({"error": "No active account"}, status_code=400)
+    try: data = await request.json()
+    except: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    appids = data.get("appids", [])
+    exclude = data.get("exclude", True)
+    if not appids: return JSONResponse({"error": "No appids"}, status_code=400)
+    count = bulk_set_exclusions(acct["steamid64"], appids, exclude)
+    log.info(f"Bulk exclusion: {count} games {'excluded' if exclude else 'included'}")
+    return JSONResponse({"ok": True, "count": count, "excluded": exclude})
+
+
+# === CONFIG API ===
+
 @app.get("/api/config")
 async def api_config_get():
     return JSONResponse(get_full_config())
@@ -363,6 +391,53 @@ async def api_config_post(request: Request):
     log.info(f"Config updated: {updated}")
     return JSONResponse({"ok": True, "updated": updated})
 
+
+# === PRESETS API ===
+
+@app.get("/api/presets")
+async def api_presets_get():
+    acct = get_active_account()
+    if not acct: return JSONResponse([])
+    return JSONResponse(get_presets(acct["steamid64"]))
+
+@app.post("/api/presets")
+async def api_presets_post(request: Request):
+    acct = get_active_account()
+    if not acct: return JSONResponse({"error": "No active account"}, status_code=400)
+    try: data = await request.json()
+    except: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    name = data.get("name", "").strip()
+    if not name: return JSONResponse({"error": "Name required"}, status_code=400)
+    preset_id = save_preset(
+        acct["steamid64"], name,
+        filters=data.get("filters", {}),
+        sort_field=data.get("sort_field", "name"),
+        sort_dir=data.get("sort_dir", "asc"),
+        pinned_filters=data.get("pinned_filters")
+    )
+    log.info(f"Preset saved: '{name}'")
+    return JSONResponse({"ok": True, "id": preset_id, "name": name})
+
+@app.delete("/api/presets/{preset_id}")
+async def api_presets_delete(preset_id: int):
+    acct = get_active_account()
+    if not acct: return JSONResponse({"error": "No active account"}, status_code=400)
+    delete_preset(acct["steamid64"], preset_id)
+    log.info(f"Preset deleted: {preset_id}")
+    return JSONResponse({"ok": True})
+
+
+# === FILTER VALUES API ===
+
+@app.get("/api/filter-values")
+async def api_filter_values():
+    acct = get_active_account()
+    if not acct: return JSONResponse({})
+    return JSONResponse(get_distinct_values(acct["steamid64"]))
+
+
+# === LIBRARY OPERATIONS ===
+
 @app.post("/api/refresh-library")
 async def api_refresh_library():
     acct = get_active_account()
@@ -372,6 +447,9 @@ async def api_refresh_library():
     if games is not None:
         return JSONResponse({"ok": True, "count": upsert_games(acct["steamid64"], games)})
     return JSONResponse({"error": "Steam API fetch failed"}, status_code=500)
+
+
+# === ENRICHMENT API ===
 
 @app.post("/api/enrichment/start")
 async def api_enrichment_start():
@@ -401,7 +479,7 @@ def main():
     config = get_config("global")
     port = config.get("server_port", 8787)
     if isinstance(port, str): port = int(port)
-    log.info(f"PSS Server v0.1.0 on http://0.0.0.0:{port}")
+    log.info(f"PSS Server v0.2.0 on http://0.0.0.0:{port}")
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info", access_log=False)
 
 if __name__ == "__main__":

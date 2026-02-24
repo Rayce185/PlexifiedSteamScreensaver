@@ -6,7 +6,7 @@ from datetime import datetime
 from contextlib import contextmanager
 
 DB_PATH = None
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -50,18 +50,39 @@ CREATE TABLE IF NOT EXISTS display_elements (
     PRIMARY KEY (account_id, element_id),
     FOREIGN KEY (account_id) REFERENCES accounts(steamid64)
 );
+CREATE TABLE IF NOT EXISTS presets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id TEXT NOT NULL, name TEXT NOT NULL,
+    filters TEXT NOT NULL DEFAULT '{}', sort_field TEXT DEFAULT 'name',
+    sort_dir TEXT DEFAULT 'asc', pinned_filters TEXT DEFAULT '[]',
+    is_builtin INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (account_id) REFERENCES accounts(steamid64),
+    UNIQUE(account_id, name)
+);
 CREATE INDEX IF NOT EXISTS idx_games_account ON games(account_id);
 CREATE INDEX IF NOT EXISTS idx_games_appid ON games(appid);
 CREATE INDEX IF NOT EXISTS idx_exclusions_account ON exclusions(account_id);
 CREATE INDEX IF NOT EXISTS idx_enrichment_type ON enrichment(type);
 CREATE INDEX IF NOT EXISTS idx_config_scope ON config(scope);
+CREATE INDEX IF NOT EXISTS idx_presets_account ON presets(account_id);
 """
 
 MUTABLE_CONFIG_KEYS = {
     "mute_after_seconds", "screensaver_after_seconds", "sleep_after_seconds",
     "screensaver_slide_duration_seconds", "screensaver_transition_seconds",
-    "screensaver_title_delay_seconds", "ken_burns_intensity", "log_level"
+    "screensaver_title_delay_seconds", "ken_burns_intensity", "log_level",
+    "screensaver_types"
 }
+
+BUILTIN_PRESETS = [
+    {"name": "All Games", "filters": {"type": ["game"], "included": "included"}, "sort_field": "name", "sort_dir": "asc"},
+    {"name": "Full Library", "filters": {}, "sort_field": "name", "sort_dir": "asc"},
+    {"name": "Unplayed Backlog", "filters": {"type": ["game"], "included": "included", "played": "never"}, "sort_field": "name", "sort_dir": "asc"},
+    {"name": "Top Rated", "filters": {"type": ["game"], "enriched": "yes", "metacritic_min": 70}, "sort_field": "metacritic_score", "sort_dir": "desc"},
+    {"name": "Recently Played", "filters": {"type": ["game"], "played": "played"}, "sort_field": "last_played_ts", "sort_dir": "desc"},
+]
 
 def init_db(db_path):
     global DB_PATH
@@ -69,8 +90,36 @@ def init_db(db_path):
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     with get_db() as db:
         db.executescript(SCHEMA_SQL)
+        # Check schema version for migrations
+        row = db.execute("SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
+        old_version = int(row["value"]) if row else 0
+        if old_version < 2:
+            _migrate_to_v2(db)
         db.execute("INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)",
                     ("schema_version", str(SCHEMA_VERSION)))
+
+def _migrate_to_v2(db):
+    """Migration from schema v1 to v2: add presets table (handled by CREATE IF NOT EXISTS),
+    seed builtin presets for existing accounts, seed screensaver_types config."""
+    # Seed screensaver_types default if not exists
+    existing = db.execute("SELECT 1 FROM config WHERE scope='global' AND key='screensaver_types'").fetchone()
+    if not existing:
+        db.execute("INSERT INTO config (scope, key, value) VALUES ('global', 'screensaver_types', ?)",
+                   (json.dumps(["game"]),))
+    # Seed builtin presets for all accounts
+    accounts = db.execute("SELECT steamid64 FROM accounts").fetchall()
+    for acct in accounts:
+        _seed_builtin_presets(db, acct["steamid64"])
+
+def _seed_builtin_presets(db, account_id):
+    for bp in BUILTIN_PRESETS:
+        existing = db.execute("SELECT 1 FROM presets WHERE account_id=? AND name=?",
+                              (account_id, bp["name"])).fetchone()
+        if not existing:
+            db.execute("""INSERT INTO presets (account_id, name, filters, sort_field, sort_dir, is_builtin)
+                          VALUES (?, ?, ?, ?, ?, 1)""",
+                       (account_id, bp["name"], json.dumps(bp["filters"]),
+                        bp["sort_field"], bp["sort_dir"]))
 
 DEFAULT_DISPLAY_ELEMENTS = [
     {"id": "installed_badge", "enabled": True, "order": 0},
@@ -117,6 +166,8 @@ def upsert_account(steamid64, persona_name=None, is_active=False):
                 persona_name = COALESCE(excluded.persona_name, accounts.persona_name),
                 is_active = excluded.is_active, updated_at = datetime('now')
         """, (steamid64, persona_name, int(is_active)))
+        # Seed builtin presets for new accounts
+        _seed_builtin_presets(db, steamid64)
 
 def get_games(account_id):
     with get_db() as db:
@@ -125,8 +176,11 @@ def get_games(account_id):
                    e.release_date, e.coming_soon, e.metacritic_score, e.short_description,
                    e.controller_support, e.vr_support, e.platforms AS native_platforms,
                    e.screenshots, e.is_free, e.enriched_at,
-                   CASE WHEN e.appid IS NOT NULL THEN 1 ELSE 0 END AS enriched
-            FROM games g LEFT JOIN enrichment e ON g.appid = e.appid
+                   CASE WHEN e.appid IS NOT NULL THEN 1 ELSE 0 END AS enriched,
+                   CASE WHEN x.appid IS NOT NULL THEN 1 ELSE 0 END AS excluded
+            FROM games g
+            LEFT JOIN enrichment e ON g.appid = e.appid
+            LEFT JOIN exclusions x ON g.account_id = x.account_id AND g.appid = x.appid
             WHERE g.account_id = ?
             ORDER BY g.name COLLATE NOCASE
         """, (account_id,)).fetchall()
@@ -137,6 +191,7 @@ def get_games(account_id):
         g["ever_played"] = bool(g["ever_played"])
         g["nsfw_auto"] = bool(g["nsfw_auto"])
         g["enriched"] = bool(g["enriched"])
+        g["excluded"] = bool(g["excluded"])
         for col in ("genres", "categories", "screenshots"):
             if g.get(col):
                 try: g[col] = json.loads(g[col])
@@ -150,6 +205,9 @@ def get_games(account_id):
             g["vr_support"] = bool(g.get("vr_support"))
             g["coming_soon"] = bool(g.get("coming_soon"))
             g["is_free"] = bool(g.get("is_free"))
+        # Default type for unenriched games
+        if not g.get("type"):
+            g["type"] = "game"
         for k in ("account_id", "created_at", "updated_at"):
             g.pop(k, None)
         result.append(g)
@@ -244,6 +302,30 @@ def set_exclusions(account_id, appids):
             db.execute("INSERT INTO exclusions (account_id, appid) VALUES (?, ?)", (account_id, appid))
     return len(appids)
 
+def toggle_exclusion(account_id, appid, exclude):
+    """Toggle a single game's exclusion status. Returns new state."""
+    with get_db() as db:
+        if exclude:
+            db.execute("INSERT OR IGNORE INTO exclusions (account_id, appid) VALUES (?, ?)",
+                       (account_id, appid))
+        else:
+            db.execute("DELETE FROM exclusions WHERE account_id = ? AND appid = ?",
+                       (account_id, appid))
+    return exclude
+
+def bulk_set_exclusions(account_id, appids, exclude):
+    """Bulk include/exclude a list of appids. Returns count affected."""
+    with get_db() as db:
+        if exclude:
+            for appid in appids:
+                db.execute("INSERT OR IGNORE INTO exclusions (account_id, appid) VALUES (?, ?)",
+                           (account_id, appid))
+        else:
+            placeholders = ",".join("?" * len(appids))
+            db.execute(f"DELETE FROM exclusions WHERE account_id = ? AND appid IN ({placeholders})",
+                       [account_id] + list(appids))
+    return len(appids)
+
 def get_config(scope="global"):
     with get_db() as db:
         rows = db.execute("SELECT key, value FROM config WHERE scope = ?", (scope,)).fetchall()
@@ -258,6 +340,9 @@ def get_full_config(account_id=None):
     acct = account_id or (get_active_account() or {}).get("steamid64")
     if acct:
         config["display_elements"] = get_display_elements(acct)
+    # Ensure screensaver_types has a default
+    if "screensaver_types" not in config:
+        config["screensaver_types"] = ["game"]
     return config
 
 def set_config(updates, scope="global"):
@@ -293,3 +378,79 @@ def set_display_elements(account_id, elements):
         for el in elements:
             db.execute("INSERT INTO display_elements (account_id, element_id, enabled, sort_order) VALUES (?,?,?,?)",
                        (account_id, el["id"], int(el.get("enabled", True)), el.get("order", 0)))
+
+# === PRESETS ===
+
+def get_presets(account_id):
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT id, name, filters, sort_field, sort_dir, pinned_filters, is_builtin
+            FROM presets WHERE account_id = ? ORDER BY is_builtin DESC, name COLLATE NOCASE
+        """, (account_id,)).fetchall()
+    result = []
+    for r in rows:
+        p = dict(r)
+        try: p["filters"] = json.loads(p["filters"])
+        except: p["filters"] = {}
+        try: p["pinned_filters"] = json.loads(p["pinned_filters"])
+        except: p["pinned_filters"] = []
+        p["is_builtin"] = bool(p["is_builtin"])
+        result.append(p)
+    return result
+
+def save_preset(account_id, name, filters, sort_field="name", sort_dir="asc", pinned_filters=None):
+    with get_db() as db:
+        db.execute("""
+            INSERT INTO presets (account_id, name, filters, sort_field, sort_dir, pinned_filters)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(account_id, name) DO UPDATE SET
+                filters=excluded.filters, sort_field=excluded.sort_field,
+                sort_dir=excluded.sort_dir, pinned_filters=excluded.pinned_filters,
+                updated_at=datetime('now')
+        """, (account_id, name, json.dumps(filters), sort_field, sort_dir,
+              json.dumps(pinned_filters or [])))
+        return db.execute("SELECT last_insert_rowid()").fetchone()[0]
+
+def delete_preset(account_id, preset_id):
+    with get_db() as db:
+        # Don't delete builtins
+        db.execute("DELETE FROM presets WHERE id = ? AND account_id = ? AND is_builtin = 0",
+                   (preset_id, account_id))
+
+def get_distinct_values(account_id):
+    """Get all distinct filterable values from the library for populating filter dropdowns."""
+    with get_db() as db:
+        # Types
+        types = db.execute("""
+            SELECT DISTINCT COALESCE(e.type, 'game') as type FROM games g
+            LEFT JOIN enrichment e ON g.appid = e.appid WHERE g.account_id = ?
+        """, (account_id,)).fetchall()
+        # Genres (stored as JSON arrays)
+        genre_rows = db.execute("""
+            SELECT e.genres FROM enrichment e
+            INNER JOIN games g ON g.appid = e.appid
+            WHERE g.account_id = ? AND e.genres IS NOT NULL AND e.genres != '[]'
+        """, (account_id,)).fetchall()
+        genres = set()
+        for r in genre_rows:
+            try:
+                for g in json.loads(r["genres"]):
+                    genres.add(g)
+            except: pass
+        # Developers
+        devs = db.execute("""
+            SELECT DISTINCT e.developer FROM enrichment e
+            INNER JOIN games g ON g.appid = e.appid
+            WHERE g.account_id = ? AND e.developer IS NOT NULL AND e.developer != ''
+        """, (account_id,)).fetchall()
+        # Controller support values
+        controllers = db.execute("""
+            SELECT DISTINCT e.controller_support FROM enrichment e
+            INNER JOIN games g ON g.appid = e.appid WHERE g.account_id = ?
+        """, (account_id,)).fetchall()
+    return {
+        "types": sorted(set(r["type"] for r in types)),
+        "genres": sorted(genres),
+        "developers": sorted(set(r["developer"] for r in devs)),
+        "controller_support": sorted(set(r["controller_support"] for r in controllers)),
+    }

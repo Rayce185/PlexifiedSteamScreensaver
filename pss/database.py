@@ -94,7 +94,7 @@ MUTABLE_CONFIG_KEYS = {
     "shovelware_enable_avg_playtime", "shovelware_enable_reviews",
     "shovelware_enable_ratio", "shovelware_enable_owners",
     "shovelware_enable_user_playtime", "shovelware_enable_metacritic",
-    "auto_enrich_threshold", "auto_refresh_on_startup"
+    "auto_enrich_threshold", "auto_refresh_on_startup", "watchdog_interval"
 }
 
 BUILTIN_PRESETS = [
@@ -258,6 +258,58 @@ def get_active_account():
     with get_db() as db:
         row = db.execute("SELECT * FROM accounts WHERE is_active = 1 LIMIT 1").fetchone()
         return dict(row) if row else None
+
+def get_all_accounts():
+    """Return all accounts with game counts, enrichment stats, and API key status."""
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT a.*,
+                (SELECT COUNT(*) FROM games g WHERE g.account_id = a.steamid64) AS game_count,
+                (SELECT COUNT(*) FROM games g
+                    INNER JOIN enrichment e ON g.appid = e.appid
+                    WHERE g.account_id = a.steamid64) AS enriched_count
+            FROM accounts a ORDER BY a.is_active DESC, a.persona_name COLLATE NOCASE
+        """).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        d["is_active"] = bool(d["is_active"])
+        d["has_api_key"] = bool(get_account_config(d["steamid64"], "steam_api_key"))
+        result.append(d)
+    return result
+
+def set_active_account(steamid64):
+    """Deactivate all accounts and activate the specified one. Returns the activated account."""
+    with get_db() as db:
+        db.execute("UPDATE accounts SET is_active = 0, updated_at = datetime('now')")
+        db.execute("UPDATE accounts SET is_active = 1, updated_at = datetime('now') WHERE steamid64 = ?",
+                   (steamid64,))
+    return get_active_account()
+
+def get_account_config(steamid64, key):
+    """Get a per-account config value. Returns None if not set."""
+    scope = f"account:{steamid64}"
+    with get_db() as db:
+        row = db.execute("SELECT value FROM config WHERE scope = ? AND key = ?", (scope, key)).fetchone()
+    if row:
+        try: return json.loads(row["value"])
+        except: return row["value"]
+    return None
+
+def set_account_config(steamid64, key, value):
+    """Set a per-account config value."""
+    scope = f"account:{steamid64}"
+    with get_db() as db:
+        db.execute("""
+            INSERT INTO config (scope, key, value, updated_at) VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(scope, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+        """, (scope, key, json.dumps(value)))
+
+def delete_account_config(steamid64, key):
+    """Remove a per-account config value."""
+    scope = f"account:{steamid64}"
+    with get_db() as db:
+        db.execute("DELETE FROM config WHERE scope = ? AND key = ?", (scope, key))
 
 def upsert_account(steamid64, persona_name=None, is_active=False):
     with get_db() as db:

@@ -3,6 +3,7 @@
 import json, os, re, logging, threading, time, urllib.request, urllib.error
 from pathlib import Path
 from datetime import datetime
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -11,13 +12,15 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from pss.database import (
-    init_db, get_active_account, upsert_account, get_games, upsert_games,
+    init_db, get_active_account, get_all_accounts, set_active_account,
+    upsert_account, get_games, upsert_games,
     upsert_enrichment, upsert_steamspy, upsert_deck_protondb,
     get_unenriched_appids, get_steamspy_unenriched_appids,
     get_deck_unenriched_appids, get_all_enriched_appids,
     get_enrichment_count, bulk_update_app_types,
     get_exclusions, set_exclusions, toggle_exclusion, bulk_set_exclusions,
     get_full_config, get_config, set_config, set_display_elements,
+    get_account_config, set_account_config, delete_account_config,
     get_presets, save_preset, delete_preset, get_distinct_values,
     snapshot_exclusions, get_exclusion_snapshots, restore_exclusion_snapshot,
     MUTABLE_CONFIG_KEYS
@@ -175,45 +178,65 @@ def get_installed_appids():
     return set(scan_local_manifests().keys())
 
 
-def parse_loginusers_vdf() -> tuple[str, str] | tuple[None, None]:
-    """Read SteamID64 and persona name from Steam's loginusers.vdf."""
+def parse_loginusers_vdf() -> list[dict]:
+    """Parse ALL accounts from Steam's loginusers.vdf.
+    Returns list of {steamid64, persona_name, most_recent, timestamp}."""
     vdf_path = Path(STEAM_PATH) / "config" / "loginusers.vdf"
     if not vdf_path.exists():
         log.warning(f"loginusers.vdf not found at {vdf_path}")
-        return None, None
+        return []
     try:
         text = vdf_path.read_text(encoding="utf-8", errors="ignore")
-        current_id = None
-        current_name = None
-        best_id = None
-        best_name = None
-        most_recent = False
+        accounts = []
+        current = {}
         for line in text.splitlines():
-            line = line.strip().strip('"')
-            if re.match(r"^7656\d{13}$", line):
-                if current_id and most_recent:
-                    best_id, best_name = current_id, current_name
-                current_id = line
-                current_name = None
-                most_recent = False
-            elif '"PersonaName"' in line or '"personaname"' in line:
-                parts = line.split('"')
-                if len(parts) >= 4:
-                    current_name = parts[3]
-            elif '"MostRecent"' in line or '"mostrecent"' in line:
-                if '"1"' in line:
-                    most_recent = True
-        if current_id and most_recent:
-            best_id, best_name = current_id, current_name
-        if not best_id and current_id:
-            best_id = current_id
-            best_name = current_name
-        if best_id:
-            log.info(f"Detected Steam account: {best_id} ({best_name or 'unknown'})")
-        return best_id, best_name
+            stripped = line.strip().strip('"')
+            if re.match(r"^7656\d{13}$", stripped):
+                if current.get("steamid64"):
+                    accounts.append(current)
+                current = {"steamid64": stripped, "persona_name": None,
+                           "most_recent": False, "timestamp": 0}
+            elif current.get("steamid64"):
+                if '"PersonaName"' in line or '"personaname"' in line:
+                    parts = line.split('"')
+                    if len(parts) >= 4:
+                        current["persona_name"] = parts[3]
+                elif '"MostRecent"' in line or '"mostrecent"' in line:
+                    current["most_recent"] = '"1"' in line
+                elif '"Timestamp"' in line or '"timestamp"' in line:
+                    parts = line.split('"')
+                    if len(parts) >= 4:
+                        try: current["timestamp"] = int(parts[3])
+                        except: pass
+        if current.get("steamid64"):
+            accounts.append(current)
+        if accounts:
+            active = [a for a in accounts if a["most_recent"]]
+            log.info(f"VDF: {len(accounts)} account(s), active: "
+                     f"{active[0]['steamid64'] if active else 'none'}")
+        return accounts
     except Exception as e:
         log.error(f"Failed to parse loginusers.vdf: {e}")
-        return None, None
+        return []
+
+
+def get_vdf_active() -> tuple[str, str] | tuple[None, None]:
+    """Convenience: get the MostRecent account from VDF. Returns (steamid64, persona)."""
+    accounts = parse_loginusers_vdf()
+    active = [a for a in accounts if a["most_recent"]]
+    if active:
+        return active[0]["steamid64"], active[0]["persona_name"]
+    if accounts:
+        return accounts[0]["steamid64"], accounts[0]["persona_name"]
+    return None, None
+
+
+def get_api_key_for(steamid64: str) -> str:
+    """Resolve API key for an account: per-account config -> global .env -> empty."""
+    per_account = get_account_config(steamid64, "steam_api_key")
+    if per_account:
+        return per_account
+    return STEAM_API_KEY  # global default from .env
 
 
 def process_games(raw_games):
@@ -466,7 +489,7 @@ def fetch_protondb_tier(appid):
         return None
 
 
-def _fetch_type_page(type_filter, our_type):
+def _fetch_type_page(type_filter, our_type, api_key=None):
     """Paginate IStoreService/GetAppList with a single include_* filter.
     Returns set of appids matching that type."""
     # Build include params: all false EXCEPT the one we want
@@ -477,7 +500,7 @@ def _fetch_type_page(type_filter, our_type):
     page = 0
     while True:
         url = (f"https://api.steampowered.com/IStoreService/GetAppList/v1/"
-               f"?key={STEAM_API_KEY}&max_results=50000&last_appid={last_appid}&{params}")
+               f"?key={api_key or STEAM_API_KEY}&max_results=50000&last_appid={last_appid}&{params}")
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "PSS/0.2"})
             with urllib.request.urlopen(req, timeout=30) as resp:
@@ -497,11 +520,12 @@ def _fetch_type_page(type_filter, our_type):
     return appids
 
 
-def fetch_type_catalog():
+def fetch_type_catalog(api_key=None):
     """Download Steam app catalog from IStoreService/GetAppList for type correction.
     IStoreService does NOT return a type field — you must query per type using include_* filters.
     Returns dict of {appid: app_type} for non-game types only (software, dlc, hardware)."""
-    if not STEAM_API_KEY:
+    key = api_key or STEAM_API_KEY
+    if not key:
         log.warning("No Steam API key for IStoreService type lookup")
         return {}
     type_map = {}
@@ -510,7 +534,7 @@ def fetch_type_catalog():
         ("include_software", "software"),
         ("include_hardware", "hardware"),
     ]:
-        appids = _fetch_type_page(filter_param, our_type)
+        appids = _fetch_type_page(filter_param, our_type, api_key=key)
         for aid in appids:
             type_map[aid] = our_type
         log.info(f"IStoreService {our_type}: {len(appids)} apps cataloged")
@@ -524,6 +548,7 @@ def repair_types():
     account = get_active_account()
     if not account:
         return {"error": "No active account"}
+    api_key = get_api_key_for(account["steamid64"])
     from pss.database import get_db
     # Step 1: Reset all enriched types to 'game'
     with get_db() as db:
@@ -531,7 +556,7 @@ def repair_types():
         reset_count = r.rowcount
     log.info(f"Type repair: reset {reset_count} apps to 'game'")
     # Step 2: Fetch correct catalog
-    catalog = fetch_type_catalog()
+    catalog = fetch_type_catalog(api_key=api_key)
     if not catalog:
         return {"error": "Catalog fetch failed", "reset": reset_count}
     # Step 3: Apply correct non-game types
@@ -554,8 +579,9 @@ def deck_worker():
     # Phase 1: Type correction from IStoreService catalog
     with deck_lock:
         deck_state.update(phase="types", message="Downloading Steam catalog for type correction...")
+    api_key = get_api_key_for(account["steamid64"])
     log.info("Deck enrichment Phase 1: fetching IStoreService catalog for type correction")
-    catalog = fetch_type_catalog()
+    catalog = fetch_type_catalog(api_key=api_key)
     if catalog:
         owned_appids = get_all_enriched_appids(account["steamid64"])
         relevant = {aid: t for aid, t in catalog.items() if aid in owned_appids}
@@ -622,6 +648,55 @@ def deck_worker():
              f"{deck_state['skipped']} skipped, {deck_state['types_corrected']} types corrected")
 
 
+
+# === VDF WATCHDOG ===
+watchdog_state = {
+    "last_check": None, "last_active": None, "interval": 30,
+    "switches": 0, "running": False
+}
+
+async def vdf_watchdog():
+    """Background task: poll loginusers.vdf for account switches."""
+    watchdog_state["running"] = True
+    cfg = get_config("global")
+    interval = cfg.get("watchdog_interval", 30)
+    watchdog_state["interval"] = interval
+    log.info(f"VDF watchdog started (interval={interval}s)")
+    while True:
+        try:
+            await asyncio.sleep(interval)
+            steamid, persona = get_vdf_active()
+            watchdog_state["last_check"] = datetime.utcnow().isoformat()
+            if not steamid:
+                continue
+            current = get_active_account()
+            current_id = current["steamid64"] if current else None
+            watchdog_state["last_active"] = steamid
+            if steamid != current_id:
+                log.info(f"VDF watchdog: account switch detected {current_id} -> {steamid}")
+                # Ensure account exists in DB
+                upsert_account(steamid, persona_name=persona, is_active=True)
+                set_active_account(steamid)
+                watchdog_state["switches"] += 1
+                # If new account has no games, auto-fetch
+                new_acct = get_active_account()
+                games = get_games(steamid)
+                if not games:
+                    api_key = get_api_key_for(steamid)
+                    if api_key:
+                        log.info(f"Watchdog: new account {steamid} has no games, fetching library...")
+                        fetched = fetch_steam_library(api_key, steamid)
+                        if fetched:
+                            count = upsert_games(steamid, fetched)
+                            log.info(f"Watchdog: loaded {count} games for {steamid}")
+        except asyncio.CancelledError:
+            log.info("VDF watchdog stopped")
+            watchdog_state["running"] = False
+            return
+        except Exception as e:
+            log.error(f"VDF watchdog error: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app):
     init_db(str(DB_PATH))
@@ -638,34 +713,43 @@ async def lifespan(app):
                 elif key == "STEAM_PATH": STEAM_PATH = value
     config = get_config("global")
     STEAM_PATH = config.get("steam_path", STEAM_PATH)
+    # Register all VDF accounts in DB
+    vdf_accounts = parse_loginusers_vdf()
+    for va in vdf_accounts:
+        upsert_account(va["steamid64"], persona_name=va["persona_name"],
+                       is_active=va["most_recent"])
+
     account = get_active_account()
-    if not account and STEAM_API_KEY:
-        steamid, persona = parse_loginusers_vdf()
-        if steamid:
-            upsert_account(steamid, persona_name=persona or "Owner", is_active=True)
-            account = get_active_account()
-            log.info(f"Auto-created account: {steamid} ({persona or 'Owner'})")
-            games = fetch_steam_library(STEAM_API_KEY, steamid)
+    if not account and vdf_accounts:
+        # Fallback: activate first VDF account
+        first = vdf_accounts[0]
+        upsert_account(first["steamid64"], persona_name=first["persona_name"], is_active=True)
+        account = get_active_account()
+
+    if account:
+        api_key = get_api_key_for(account["steamid64"])
+        log.info(f"Active account: {account['steamid64']} ({account.get('persona_name', 'unknown')})")
+        if not get_games(account["steamid64"]) and api_key:
+            log.info(f"First-run: fetching library for {account['steamid64']}...")
+            games = fetch_steam_library(api_key, account["steamid64"])
             if games:
-                count = upsert_games(steamid, games)
+                count = upsert_games(account["steamid64"], games)
                 log.info(f"First-run library fetch: {count} games loaded")
             else:
                 log.error("First-run library fetch failed")
         else:
-            log.warning("Could not detect Steam account — start enrichment manually after setup")
-    elif account:
-        log.info(f"Active account: {account['steamid64']} ({account.get('persona_name', 'unknown')})")
-        # Auto-refresh library on startup if configured
-        cfg = get_full_config()
-        if cfg.get("auto_refresh_on_startup", False) and STEAM_API_KEY:
-            log.info("Auto-refreshing library on startup...")
-            games = fetch_steam_library(STEAM_API_KEY, account["steamid64"])
-            if games:
-                count = upsert_games(account["steamid64"], games)
-                log.info(f"Auto-refresh complete: {count} games")
+            cfg = get_full_config()
+            if cfg.get("auto_refresh_on_startup", False) and api_key:
+                log.info("Auto-refreshing library on startup...")
+                games = fetch_steam_library(api_key, account["steamid64"])
+                if games:
+                    count = upsert_games(account["steamid64"], games)
+                    log.info(f"Auto-refresh complete: {count} games")
+    else:
+        log.warning("No accounts detected — configure via /customizer")
 
     # One-time repair: fix type corruption from IStoreService duplicate param bug
-    if account and STEAM_API_KEY:
+    if account and api_key_for_enrich:
         from pss.database import get_db
         with get_db() as db:
             hw_count = db.execute("SELECT COUNT(*) as c FROM enrichment WHERE type='hardware'").fetchone()["c"]
@@ -678,7 +762,8 @@ async def lifespan(app):
             db.execute("UPDATE enrichment SET type = 'game' WHERE type IN ('advertising', 'dlc')")
 
     # Auto-enrich on first run if library is small enough
-    if account and STEAM_API_KEY:
+    api_key_for_enrich = get_api_key_for(account["steamid64"]) if account else ""
+    if account and api_key_for_enrich:
         cfg = get_full_config()
         threshold = cfg.get("auto_enrich_threshold", 200)
         existing_games = get_games(account["steamid64"])
@@ -695,7 +780,12 @@ async def lifespan(app):
         elif need_enrich > 0 and total > threshold:
             log.info(f"Library has {total} games (> {threshold} threshold) — "
                      f"skipping auto-enrich, {need_enrich} unenriched")
+    # Start VDF watchdog
+    watchdog_task = asyncio.create_task(vdf_watchdog())
     yield
+    watchdog_task.cancel()
+    try: await watchdog_task
+    except asyncio.CancelledError: pass
     log.info("PSS server shutting down")
 
 
@@ -806,7 +896,14 @@ async def api_exclusion_restore(snapshot_id: int):
 
 @app.get("/api/config")
 async def api_config_get():
-    return JSONResponse(get_full_config())
+    config = get_full_config()
+    acct = get_active_account()
+    if acct:
+        config["active_account"] = {
+            "steamid64": acct["steamid64"],
+            "persona_name": acct.get("persona_name", "Unknown")
+        }
+    return JSONResponse(config)
 
 @app.post("/api/config")
 async def api_config_post(request: Request):
@@ -875,11 +972,98 @@ async def api_filter_values():
 async def api_refresh_library():
     acct = get_active_account()
     if not acct: return JSONResponse({"error": "No active account"}, status_code=400)
-    if not STEAM_API_KEY: return JSONResponse({"error": "No STEAM_API_KEY"}, status_code=500)
-    games = fetch_steam_library(STEAM_API_KEY, acct["steamid64"])
+    api_key = get_api_key_for(acct["steamid64"])
+    if not api_key: return JSONResponse({"error": "No API key for this account"}, status_code=500)
+    games = fetch_steam_library(api_key, acct["steamid64"])
     if games is not None:
         return JSONResponse({"ok": True, "count": upsert_games(acct["steamid64"], games)})
     return JSONResponse({"error": "Steam API fetch failed"}, status_code=500)
+
+
+
+
+# === ACCOUNT MANAGEMENT API ===
+
+@app.get("/api/accounts")
+async def api_accounts():
+    """List all known accounts with stats."""
+    accounts = get_all_accounts()
+    # Add whether the global default key is available
+    return JSONResponse({
+        "accounts": accounts,
+        "has_default_key": bool(STEAM_API_KEY),
+        "watchdog": dict(watchdog_state)
+    })
+
+@app.post("/api/accounts/switch")
+async def api_accounts_switch(request: Request):
+    """Manually switch active account."""
+    try: data = await request.json()
+    except: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    steamid = data.get("steamid64")
+    if not steamid: return JSONResponse({"error": "Missing steamid64"}, status_code=400)
+    acct = set_active_account(steamid)
+    if not acct: return JSONResponse({"error": "Account not found"}, status_code=404)
+    log.info(f"Manual account switch to {steamid} ({acct.get('persona_name', 'unknown')})")
+    return JSONResponse({"ok": True, "account": acct})
+
+@app.get("/api/accounts/detect")
+async def api_accounts_detect():
+    """Force re-read VDF and register any new accounts."""
+    vdf_accounts = parse_loginusers_vdf()
+    for va in vdf_accounts:
+        upsert_account(va["steamid64"], persona_name=va["persona_name"],
+                       is_active=va["most_recent"])
+    # If VDF says a different account is active, switch
+    active_vdf = [a for a in vdf_accounts if a["most_recent"]]
+    if active_vdf:
+        current = get_active_account()
+        if not current or current["steamid64"] != active_vdf[0]["steamid64"]:
+            set_active_account(active_vdf[0]["steamid64"])
+    return JSONResponse({
+        "vdf_accounts": vdf_accounts,
+        "accounts": get_all_accounts()
+    })
+
+@app.post("/api/accounts/{steamid64}/api-key")
+async def api_accounts_set_key(steamid64: str, request: Request):
+    """Set or validate a per-account API key."""
+    try: data = await request.json()
+    except: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    api_key = data.get("api_key", "").strip()
+    if not api_key: return JSONResponse({"error": "Missing api_key"}, status_code=400)
+    # Validate against Steam API
+    test_url = f"https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={api_key}&steamids={steamid64}"
+    try:
+        req = urllib.request.Request(test_url, headers={"User-Agent": "PSS/0.2"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode())
+        players = result.get("response", {}).get("players", [])
+        if not players:
+            return JSONResponse({"error": "API key valid but no player data returned"}, status_code=400)
+    except urllib.error.HTTPError as e:
+        if e.code == 403:
+            return JSONResponse({"error": "Invalid API key (403 Forbidden)"}, status_code=400)
+        return JSONResponse({"error": f"Validation failed: HTTP {e.code}"}, status_code=500)
+    except Exception as e:
+        return JSONResponse({"error": f"Validation failed: {e}"}, status_code=500)
+    set_account_config(steamid64, "steam_api_key", api_key)
+    log.info(f"API key set for account {steamid64}")
+    return JSONResponse({"ok": True, "steamid64": steamid64, "validated": True})
+
+@app.delete("/api/accounts/{steamid64}/api-key")
+async def api_accounts_delete_key(steamid64: str):
+    """Remove per-account API key (falls back to default)."""
+    delete_account_config(steamid64, "steam_api_key")
+    log.info(f"API key removed for account {steamid64}")
+    return JSONResponse({"ok": True, "steamid64": steamid64, "using_default": bool(STEAM_API_KEY)})
+
+@app.get("/api/accounts/active")
+async def api_accounts_active():
+    """Get current active account info (for frontend polling)."""
+    acct = get_active_account()
+    if not acct: return JSONResponse({"active": None})
+    return JSONResponse({"active": acct})
 
 
 # === ENRICHMENT API ===

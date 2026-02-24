@@ -228,6 +228,26 @@ input[type=file]{display:none}
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface);border:1px solid var(--border);color:var(--text);padding:8px 18px;border-radius:8px;font-size:.82rem;z-index:200;transition:transform .3s ease,opacity .3s ease;opacity:0;pointer-events:none}
 .toast.visible{transform:translateX(-50%) translateY(0);opacity:1}
+
+/* Account selector */
+.account-bar{display:flex;align-items:center;gap:8px;padding:2px 0}
+.account-badge{font-size:.7rem;padding:2px 6px;border-radius:4px;font-weight:600}
+.account-badge.active{background:rgba(63,185,80,.15);color:var(--green)}
+.account-badge.inactive{background:rgba(255,255,255,.06);color:var(--text-dim)}
+.account-badge.no-key{background:rgba(255,140,0,.12);color:#f0a050}
+.account-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.account-card.is-active{border-color:var(--green);background:rgba(63,185,80,.04)}
+.account-card .acct-name{font-weight:600;font-size:.85rem}
+.account-card .acct-id{font-size:.65rem;color:var(--text-faint);font-family:monospace}
+.account-card .acct-stats{font-size:.7rem;color:var(--text-dim)}
+.account-card .acct-actions{display:flex;gap:6px;align-items:center}
+.key-input-wrap{display:flex;gap:6px;align-items:center;margin-top:6px}
+.key-input-wrap input{font-size:.7rem;padding:4px 8px;width:280px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:monospace}
+.watchdog-indicator{font-size:.65rem;color:var(--text-faint);display:flex;align-items:center;gap:4px;margin-top:8px}
+.watchdog-dot{width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block}
+.watchdog-dot.off{background:var(--text-faint)}
+.acct-header-name{font-size:.72rem;color:var(--text-dim);margin-left:auto;padding-right:4px}
+
 </style>
 </head>
 <body>
@@ -241,7 +261,8 @@ input[type=file]{display:none}
     <span>Enriched: <span class="stat-val" id="st-enriched" style="color:var(--purple)">-</span></span>
     <span>Shovelware: <span class="stat-val" id="st-shovelware" style="color:var(--red)">-</span></span>
   </div>
-  <div class="header-actions">
+  <span class="acct-header-name" id="acct-header-label"></span>
+    <div class="header-actions">
     <button class="btn btn-accent" onclick="openPreview()">&#9654; Preview</button>
   </div>
 </div>
@@ -342,6 +363,7 @@ input[type=file]{display:none}
 <!-- SETTINGS TAB -->
 <div class="tab-content" id="tab-settings">
   <div class="settings-nav" id="settings-nav">
+    <a href="#sec-accounts" onclick="settingsJump(event,'sec-accounts')">Accounts</a>
     <a href="#sec-timing" onclick="settingsJump(event,'sec-timing')">Timing</a>
     <a href="#sec-animation" onclick="settingsJump(event,'sec-animation')">Animation</a>
     <a href="#sec-sstypes" onclick="settingsJump(event,'sec-sstypes')">Types</a>
@@ -352,6 +374,16 @@ input[type=file]{display:none}
     <a href="#sec-data" onclick="settingsJump(event,'sec-data')">Data</a>
   </div>
   <div class="settings-tab">
+    <div class="section-title" id="sec-accounts">&#128100; Accounts</div>
+    <div id="accounts-list"></div>
+    <div style="margin-top:8px;display:flex;gap:8px">
+      <button class="btn btn-sm" onclick="detectAccounts()">&#128269; Detect from Steam</button>
+    </div>
+    <div class="watchdog-indicator" id="watchdog-info">
+      <span class="watchdog-dot off" id="watchdog-dot"></span>
+      <span id="watchdog-label">Watchdog: loading...</span>
+    </div>
+
     <div class="section-title" id="sec-timing">&#9201; Timing</div>
     <div class="setting-row"><div><div class="setting-label">Idle activation</div><div class="setting-desc">Mute + screensaver after this idle time</div></div><div class="setting-input"><input type="number" id="s-idle" min="30" max="600" step="10"><span class="setting-unit">sec</span></div></div>
     <div class="setting-row"><div><div class="setting-label">Slide duration</div><div class="setting-desc">How long each game hero is shown</div></div><div class="setting-input"><input type="number" id="s-slide" min="5" max="60" step="1"><span class="setting-unit">sec</span></div></div>
@@ -1607,8 +1639,171 @@ window.revertSnapshot=async function(id){
   }catch(e){toast('Restore failed')}
 };
 
+
+// === ACCOUNT MANAGEMENT ===
+let ACCOUNTS_DATA = null;
+let CURRENT_ACCOUNT_ID = null;
+let accountPoll = null;
+
+async function loadAccounts() {
+  try {
+    const r = await fetch('/api/accounts');
+    const data = await r.json();
+    ACCOUNTS_DATA = data;
+    const active = data.accounts.find(a => a.is_active);
+    const newId = active ? active.steamid64 : null;
+    // Detect switch: if active account changed since last check, reload data
+    if (CURRENT_ACCOUNT_ID && newId && CURRENT_ACCOUNT_ID !== newId) {
+      CURRENT_ACCOUNT_ID = newId;
+      toast('Account switched to ' + (active.persona_name || newId));
+      await reloadAllData();
+    }
+    CURRENT_ACCOUNT_ID = newId;
+    renderAccounts(data);
+    updateAccountHeader(active);
+    updateWatchdog(data.watchdog);
+  } catch(e) { console.error('loadAccounts failed', e); }
+}
+
+function renderAccounts(data) {
+  const list = document.getElementById('accounts-list');
+  if (!list) return;
+  if (!data.accounts.length) {
+    list.innerHTML = '<div style="color:var(--text-dim);font-size:.8rem;padding:8px 0">No accounts detected. Click "Detect from Steam" or check Steam path.</div>';
+    return;
+  }
+  list.innerHTML = data.accounts.map(a => {
+    const isActive = a.is_active;
+    const hasKey = a.has_api_key || data.has_default_key;
+    const keyLabel = a.has_api_key ? 'Own key' : (data.has_default_key ? 'Default key' : 'No key');
+    const keyBadge = hasKey
+      ? '<span class="account-badge active">' + keyLabel + '</span>'
+      : '<span class="account-badge no-key">No API key</span>';
+    return '<div class="account-card' + (isActive ? ' is-active' : '') + '" data-sid="' + a.steamid64 + '">' +
+      '<div>' +
+        '<div class="acct-name">' + (a.persona_name || 'Unknown') + ' ' +
+          (isActive ? '<span class="account-badge active">Active</span>' : '') +
+          keyBadge +
+        '</div>' +
+        '<div class="acct-id">' + a.steamid64 + '</div>' +
+        '<div class="acct-stats">' + (a.game_count||0) + ' games \u00b7 ' + (a.enriched_count||0) + ' enriched</div>' +
+        (!hasKey ? '<div class="key-input-wrap" id="key-wrap-' + a.steamid64 + '">' +
+          '<input type="text" placeholder="Steam API key..." id="key-input-' + a.steamid64 + '">' +
+          '<button class="btn btn-sm btn-accent" onclick="setApiKey(\'' + a.steamid64 + '\')">Validate & Save</button>' +
+        '</div>' : '') +
+      '</div>' +
+      '<div class="acct-actions">' +
+        (!isActive ? '<button class="btn btn-sm btn-accent" onclick="switchAccount(\'' + a.steamid64 + '\')">Activate</button>' : '') +
+        (a.has_api_key ? '<button class="btn btn-sm btn-red" onclick="removeApiKey(\'' + a.steamid64 + '\')" title="Remove per-account key">Remove Key</button>' : '') +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function updateAccountHeader(active) {
+  const el = document.getElementById('acct-header-label');
+  if (!el) return;
+  el.textContent = active ? ('\u{1F464} ' + (active.persona_name || active.steamid64)) : '';
+}
+
+function updateWatchdog(w) {
+  const dot = document.getElementById('watchdog-dot');
+  const label = document.getElementById('watchdog-label');
+  if (!dot || !label) return;
+  dot.className = 'watchdog-dot' + (w.running ? '' : ' off');
+  if (w.last_check) {
+    const d = new Date(w.last_check + 'Z');
+    const ago = Math.round((Date.now() - d.getTime()) / 1000);
+    label.textContent = 'Watchdog: ' + (w.running ? 'active' : 'off') +
+      ' \u00b7 last check ' + ago + 's ago \u00b7 ' + w.switches + ' switch' + (w.switches !== 1 ? 'es' : '');
+  } else {
+    label.textContent = 'Watchdog: ' + (w.running ? 'waiting for first check...' : 'not started');
+  }
+}
+
+window.switchAccount = async function(steamid64) {
+  try {
+    const r = await fetch('/api/accounts/switch', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({steamid64})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      CURRENT_ACCOUNT_ID = steamid64;
+      toast('Switched to ' + (d.account.persona_name || steamid64));
+      await reloadAllData();
+      await loadAccounts();
+    } else toast(d.error || 'Switch failed');
+  } catch(e) { toast('Switch failed'); }
+};
+
+window.setApiKey = async function(steamid64) {
+  const input = document.getElementById('key-input-' + steamid64);
+  if (!input) return;
+  const key = input.value.trim();
+  if (!key) { toast('Enter an API key'); return; }
+  input.disabled = true;
+  try {
+    const r = await fetch('/api/accounts/' + steamid64 + '/api-key', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({api_key: key})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('API key validated and saved!');
+      await loadAccounts();
+    } else {
+      toast(d.error || 'Validation failed');
+      input.disabled = false;
+    }
+  } catch(e) { toast('Failed to set key'); input.disabled = false; }
+};
+
+window.removeApiKey = async function(steamid64) {
+  if (!confirm('Remove per-account API key? Will fall back to default key.')) return;
+  try {
+    const r = await fetch('/api/accounts/' + steamid64 + '/api-key', {method: 'DELETE'});
+    const d = await r.json();
+    if (d.ok) {
+      toast('Key removed' + (d.using_default ? ' (using default)' : ''));
+      await loadAccounts();
+    }
+  } catch(e) { toast('Failed'); }
+};
+
+window.detectAccounts = async function() {
+  try {
+    const r = await fetch('/api/accounts/detect');
+    const d = await r.json();
+    toast('Found ' + d.vdf_accounts.length + ' account(s) in Steam');
+    await loadAccounts();
+  } catch(e) { toast('Detection failed'); }
+};
+
+async function reloadAllData() {
+  try {
+    const [gr, cr, pr, fv] = await Promise.all([
+      fetch('/api/games').then(r=>r.json()),
+      fetch('/api/config').then(r=>r.json()),
+      fetch('/api/presets').then(r=>r.json()),
+      fetch('/api/filter-values').then(r=>r.json())
+    ]);
+    ALL=gr; CONFIG=cr; PRESETS=pr; FVALS=fv;
+    renderPresets(); renderTypeChips(); applyView(); updateStats();
+    loadSettings(); renderDisplay(); renderSSTypes();
+  } catch(e) { console.error('reloadAllData failed', e); }
+}
+
+function startAccountPoll() {
+  if (accountPoll) return;
+  accountPoll = setInterval(loadAccounts, 15000); // check every 15s
+}
+
+
 renderQuickChips();
 init();
+loadAccounts();
+startAccountPoll();
 })();
 </script>
 </body>

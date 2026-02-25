@@ -286,6 +286,19 @@ def get_all_cached_heroes(appid):
                             ORDER BY selected DESC, score DESC""", (appid,)).fetchall()
     return [dict(r) for r in rows]
 
+
+def select_cached_image(appid, source, url):
+    """Set one image as selected for an appid, deselecting all others."""
+    with get_db() as db:
+        db.execute("UPDATE image_cache SET selected = 0 WHERE appid = ?", (appid,))
+        db.execute("UPDATE image_cache SET selected = 1 WHERE appid = ? AND source = ? AND url = ?",
+                   (appid, source, url))
+
+def delete_cached_images(appid):
+    """Remove all cached image records for an appid."""
+    with get_db() as db:
+        db.execute("DELETE FROM image_cache WHERE appid = ?", (appid,))
+
 def upsert_image_cache(appid, source, url, local_path=None, style=None, score=0, width=None, height=None, selected=False):
     with get_db() as db:
         db.execute("""

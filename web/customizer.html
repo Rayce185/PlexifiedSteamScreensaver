@@ -160,6 +160,33 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .preview-details dd{color:var(--text);font-weight:500}
 .preview-actions{display:flex;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border)}
 
+/* GAME DETAIL PANEL (Phase 5) */
+.game-panel{width:0;overflow:hidden;transition:width .25s ease;flex-shrink:0;display:flex;flex-direction:column}
+.game-panel.open{width:440px;border-left:1px solid var(--border)}
+.gp-header{position:relative;flex-shrink:0}
+.gp-hero{width:100%;height:220px;object-fit:cover;display:block;background:var(--bg)}
+.gp-close{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);border:none;color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.gp-close:hover{background:rgba(0,0,0,.85)}
+.gp-body{flex:1;overflow-y:auto;padding:16px}
+.gp-name{font-size:1.2rem;font-weight:600;margin-bottom:6px}
+.gp-meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.gp-desc{font-size:.82rem;color:var(--text-dim);line-height:1.5;margin-bottom:14px}
+.gp-details{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;font-size:.78rem;margin-bottom:16px}
+.gp-details dt{color:var(--text-faint)}
+.gp-details dd{color:var(--text);font-weight:500}
+.gp-actions{display:flex;gap:8px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+.gp-section{margin-bottom:16px}
+.gp-section-title{font-size:.78rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px}
+.gp-img-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.gp-img-opt{position:relative;border-radius:6px;overflow:hidden;cursor:pointer;border:2px solid transparent;transition:border-color .15s;aspect-ratio:16/9;background:var(--bg)}
+.gp-img-opt:hover{border-color:var(--accent)}
+.gp-img-opt.active{border-color:var(--green)}
+.gp-img-opt img{width:100%;height:100%;object-fit:cover;display:block}
+.gp-img-opt .gp-img-src{position:absolute;bottom:2px;right:2px;font-size:.58rem;background:rgba(0,0,0,.7);color:#fff;padding:1px 4px;border-radius:3px}
+.gp-img-loading{text-align:center;color:var(--text-faint);font-size:.8rem;padding:20px 0}
+.gp-upload-area{display:flex;gap:8px;align-items:center;margin-top:8px}
+.gc.active{background:rgba(88,166,255,.08);border-color:rgba(88,166,255,.25)}
+
 /* BULK BAR */
 .bulk-bar{display:none;align-items:center;justify-content:space-between;padding:8px 16px;background:rgba(88,166,255,.06);border-bottom:1px solid rgba(88,166,255,.15)}
 .bulk-bar.visible{display:flex}
@@ -357,6 +384,30 @@ input[type=file]{display:none}
   <div class="game-list-area">
     <div class="game-list" id="game-list"></div>
     <div class="alpha-strip" id="alpha-strip"></div>
+    <!-- Game detail/image picker panel (Phase 5) -->
+    <div class="game-panel" id="game-panel">
+      <div class="gp-header">
+        <img class="gp-hero" id="gp-hero" src="" alt="">
+        <button class="gp-close" onclick="closeGamePanel()">&times;</button>
+      </div>
+      <div class="gp-body">
+        <div class="gp-name" id="gp-name"></div>
+        <div class="gp-meta" id="gp-meta"></div>
+        <div class="gp-desc" id="gp-desc"></div>
+        <dl class="gp-details" id="gp-details"></dl>
+        <div class="gp-actions" id="gp-actions"></div>
+        <div class="gp-section">
+          <div class="gp-section-title">Screensaver Image</div>
+          <div class="gp-img-grid" id="gp-img-grid"></div>
+          <div class="gp-img-loading" id="gp-img-loading" style="display:none">Loading image options...</div>
+          <div class="gp-upload-area">
+            <button class="btn btn-sm" onclick="triggerImageUpload()">&#128228; Upload Custom</button>
+            <button class="btn btn-sm" onclick="resetGameImage()">&#8634; Reset to Auto</button>
+            <input type="file" id="gp-upload-input" accept="image/*" style="display:none" onchange="handleImageUpload(event)">
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -781,7 +832,7 @@ function renderCard(g){
     row2='<div class="gc-row2">'+parts.join(' ')+'</div>';
   }
 
-  return '<div class="gc" data-fl="'+fl+'" data-appid="'+g.appid+'" ondblclick="showPreview('+g.appid+')"><input type="checkbox" class="gc-check" '+checked+' onclick="event.stopPropagation();toggleGame('+g.appid+',!this.checked)" title="'+(isExcl?'Include in screensaver':'Exclude from screensaver')+'"><img class="gc-thumb" src="'+g.header+'" loading="lazy" onerror="this.style.background=\'var(--border)\';this.removeAttribute(\'src\')"><div class="gc-body"><div class="gc-row1"><span class="gc-name" title="'+esc(g.name)+'">'+esc(g.name)+'</span><div class="gc-right">'+rightHtml+'</div></div>'+row2+'</div></div>';
+  return '<div class="gc" data-fl="'+fl+'" data-appid="'+g.appid+'" onclick="openGamePanel('+g.appid+')"><input type="checkbox" class="gc-check" '+checked+' onclick="event.stopPropagation();toggleGame('+g.appid+',!this.checked)" title="'+(isExcl?'Include in screensaver':'Exclude from screensaver')+'"><img class="gc-thumb" src="'+g.header+'" loading="lazy" onerror="this.style.background=\'var(--border)\';this.removeAttribute(\'src\')"><div class="gc-body"><div class="gc-row1"><span class="gc-name" title="'+esc(g.name)+'">'+esc(g.name)+'</span><div class="gc-right">'+rightHtml+'</div></div>'+row2+'</div></div>';
 }
 
 function esc(s){const e=document.createElement('span');e.textContent=s;return e.innerHTML}
@@ -1178,6 +1229,212 @@ window.deletePreset=async function(id){
 };
 
 // === PREVIEW ===
+
+// === GAME DETAIL PANEL (Phase 5) ===
+let _panelAppid = null;
+
+window.openGamePanel = function(appid) {
+  const g = ALL.find(x => x.appid === appid);
+  if (!g) return;
+  _panelAppid = appid;
+
+  // Highlight active row
+  document.querySelectorAll('.gc.active').forEach(el => el.classList.remove('active'));
+  const row = document.querySelector('.gc[data-appid="'+appid+'"]');
+  if (row) row.classList.add('active');
+
+  // Hero image
+  const hero = document.getElementById('gp-hero');
+  hero.src = '/api/image/' + appid + '/hero?t=' + Date.now();
+  hero.onerror = function() { this.src = g.hero_2x || g.header; };
+
+  // Name
+  document.getElementById('gp-name').textContent = g.name;
+
+  // Badges
+  const badges = [];
+  if (g.type && g.type !== 'game') badges.push('<span class="micro m-type" style="font-size:.74rem;padding:2px 6px">' + (TYPE_LABELS[g.type] || g.type) + '</span>');
+  if (g.installed_htpc) badges.push('<span class="micro m-inst" style="font-size:.74rem;padding:2px 6px">Installed</span>');
+  if (g.nsfw_auto) badges.push('<span class="micro m-nsfw" style="font-size:.74rem;padding:2px 6px">NSFW</span>');
+  if (g.genres) g.genres.slice(0, 4).forEach(t => badges.push('<span class="micro m-genre" style="font-size:.74rem;padding:2px 6px">' + esc(t) + '</span>'));
+  if (g.metacritic_score) badges.push('<span class="gc-score" style="font-size:.74rem;padding:2px 6px">\u2605 ' + g.metacritic_score + '</span>');
+  document.getElementById('gp-meta').innerHTML = badges.join('');
+
+  // Description
+  document.getElementById('gp-desc').innerHTML = g.short_description ? esc(g.short_description) : '';
+
+  // Details
+  let det = '';
+  if (g.developer) det += '<dt>Developer</dt><dd>' + esc(g.developer) + '</dd>';
+  if (g.publisher) det += '<dt>Publisher</dt><dd>' + esc(g.publisher) + '</dd>';
+  if (g.release_date) det += '<dt>Release</dt><dd>' + esc(g.release_date) + '</dd>';
+  det += '<dt>Playtime</dt><dd>' + (g.playtime_hours > 0 ? g.playtime_hours + 'h' : 'Never played') + '</dd>';
+  if (g.last_played) det += '<dt>Last Played</dt><dd>' + g.last_played + '</dd>';
+  const _deckL = {3: '\u2705 Verified', 2: '\u26A0\uFE0F Playable', 1: '\u274C Unsupported', 0: 'Unknown'};
+  det += '<dt>Steam Deck</dt><dd>' + (_deckL[g.deck_verified || 0]) + '</dd>';
+  document.getElementById('gp-details').innerHTML = det;
+
+  // Actions
+  const isExcl = g.excluded || g.nsfw_auto;
+  const toggleLabel = isExcl ? '\u2713 Include' : '\u2717 Exclude';
+  const toggleClass = isExcl ? 'btn-green' : 'btn-red';
+  document.getElementById('gp-actions').innerHTML =
+    '<button class="btn btn-sm ' + toggleClass + '" onclick="toggleGame(' + appid + ',' + (!isExcl) + ');refreshPanel()">' + toggleLabel + '</button>' +
+    '<a class="btn btn-sm" href="' + g.store_url + '" target="_blank">Steam Store \u2197</a>';
+
+  // Open panel
+  document.getElementById('game-panel').classList.add('open');
+
+  // Load image options async
+  loadImageOptions(appid);
+};
+
+window.closeGamePanel = function() {
+  _panelAppid = null;
+  document.getElementById('game-panel').classList.remove('open');
+  document.querySelectorAll('.gc.active').forEach(el => el.classList.remove('active'));
+};
+
+window.refreshPanel = function() {
+  if (_panelAppid) openGamePanel(_panelAppid);
+};
+
+async function loadImageOptions(appid) {
+  const grid = document.getElementById('gp-img-grid');
+  const loading = document.getElementById('gp-img-loading');
+  grid.innerHTML = '';
+  loading.style.display = 'block';
+
+  try {
+    const resp = await fetch('/api/image/' + appid + '/options');
+    const data = await resp.json();
+    loading.style.display = 'none';
+
+    const items = [];
+    const currentUrl = data.current ? data.current.url : '';
+
+    // Current cached image
+    if (data.current && data.current.local_path) {
+      items.push({src: '/api/image/' + appid + '/hero?t=' + Date.now(), label: data.current.source, active: true, source: data.current.source, url: data.current.url});
+    }
+
+    // SGDB alternatives
+    if (data.sgdb && data.sgdb.length) {
+      data.sgdb.forEach(h => {
+        if (h.url !== currentUrl) {
+          items.push({src: h.thumb || h.url, label: 'SGDB', source: 'sgdb', url: h.url});
+        }
+      });
+    }
+
+    // Screenshots
+    if (data.screenshots && data.screenshots.length) {
+      data.screenshots.forEach(s => {
+        if (s.full !== currentUrl) {
+          items.push({src: s.thumb, label: 'Screenshot', source: 'screenshot', url: s.full});
+        }
+      });
+    }
+
+    // Header fallback
+    if (data.header) {
+      items.push({src: data.header, label: 'Header', source: 'header', url: data.header});
+    }
+
+    if (!items.length) {
+      grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:var(--text-faint);font-size:.78rem;padding:12px">No image options available</div>';
+      return;
+    }
+
+    grid.innerHTML = items.map(item =>
+      '<div class="gp-img-opt' + (item.active ? ' active' : '') + '" onclick="selectGameImage(' + appid + ',\'' + item.source + '\',\'' + encodeURIComponent(item.url) + '\')">' +
+      '<img src="' + item.src + '" loading="lazy" onerror="this.parentElement.style.display=\'none\'">' +
+      '<span class="gp-img-src">' + item.label + '</span></div>'
+    ).join('');
+
+    if (data.sgdb_error === 'rate_limited') {
+      grid.innerHTML += '<div style="grid-column:1/-1;font-size:.72rem;color:var(--orange);padding:4px">SGDB rate limited — try again later</div>';
+    }
+  } catch (e) {
+    loading.style.display = 'none';
+    grid.innerHTML = '<div style="grid-column:1/-1;color:var(--red);font-size:.78rem">Failed to load options</div>';
+  }
+}
+
+window.selectGameImage = async function(appid, source, encodedUrl) {
+  const url = decodeURIComponent(encodedUrl);
+  const grid = document.getElementById('gp-img-grid');
+  grid.style.opacity = '0.5';
+  try {
+    const resp = await fetch('/api/image/' + appid + '/select', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({source: source, url: url})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      // Refresh hero image + reload options
+      document.getElementById('gp-hero').src = '/api/image/' + appid + '/hero?t=' + Date.now();
+      loadImageOptions(appid);
+      // Update thumbnail in game list
+      const thumb = document.querySelector('.gc[data-appid="'+appid+'"] .gc-thumb');
+      if (thumb) thumb.src = '/api/image/' + appid + '/hero?t=' + Date.now();
+    } else {
+      alert('Failed: ' + (data.error || 'unknown error'));
+    }
+  } catch (e) {
+    alert('Network error selecting image');
+  }
+  grid.style.opacity = '1';
+};
+
+window.triggerImageUpload = function() {
+  document.getElementById('gp-upload-input').click();
+};
+
+window.handleImageUpload = async function(event) {
+  if (!_panelAppid || !event.target.files.length) return;
+  const file = event.target.files[0];
+  const form = new FormData();
+  form.append('file', file);
+  const grid = document.getElementById('gp-img-grid');
+  grid.style.opacity = '0.5';
+  try {
+    const resp = await fetch('/api/image/' + _panelAppid + '/upload', {method: 'POST', body: form});
+    const data = await resp.json();
+    if (data.ok) {
+      document.getElementById('gp-hero').src = '/api/image/' + _panelAppid + '/hero?t=' + Date.now();
+      loadImageOptions(_panelAppid);
+    } else {
+      alert('Upload failed: ' + (data.error || 'unknown'));
+    }
+  } catch (e) {
+    alert('Network error uploading image');
+  }
+  grid.style.opacity = '1';
+  event.target.value = '';
+};
+
+window.resetGameImage = async function() {
+  if (!_panelAppid) return;
+  const grid = document.getElementById('gp-img-grid');
+  grid.style.opacity = '0.5';
+  try {
+    const resp = await fetch('/api/image/' + _panelAppid + '/select', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({source: 'reset'})
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      document.getElementById('gp-hero').src = '/api/image/' + _panelAppid + '/hero?t=' + Date.now();
+      loadImageOptions(_panelAppid);
+    }
+  } catch (e) {
+    alert('Network error resetting image');
+  }
+  grid.style.opacity = '1';
+};
+
+
 window.showPreview=function(appid){
   const g=ALL.find(x=>x.appid===appid);
   if(!g) return;
@@ -1222,6 +1479,7 @@ window.closePreview=function(){document.getElementById('preview-overlay').classL
 
 // === TABS ===
 window.switchTab=function(t){
+  if(typeof closeGamePanel==='function') closeGamePanel();
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',['games','display','settings'][i]===t));
   document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
   document.getElementById('tab-'+t).classList.add('active');
@@ -1598,7 +1856,7 @@ document.addEventListener('click',e=>{
 // Keyboard shortcuts
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    closeFilters(); closePreview();
+    closeFilters(); closePreview(); closeGamePanel();
     document.getElementById('sort-menu').classList.remove('open');
     document.getElementById('preset-menu').classList.remove('open');
   }

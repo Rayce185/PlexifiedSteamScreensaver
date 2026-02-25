@@ -6,7 +6,7 @@ from datetime import datetime
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -23,7 +23,8 @@ from pss.database import (
     get_account_config, set_account_config, delete_account_config,
     get_presets, save_preset, delete_preset, get_distinct_values,
     snapshot_exclusions, get_exclusion_snapshots, restore_exclusion_snapshot,
-    get_cached_hero, upsert_image_cache, get_uncached_appids, get_image_cache_stats,
+    get_cached_hero, get_all_cached_heroes, upsert_image_cache, get_uncached_appids, get_image_cache_stats,
+    select_cached_image, delete_cached_images,
     MUTABLE_CONFIG_KEYS
 )
 
@@ -1103,8 +1104,10 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
     # Always open: screensaver, static assets, auth endpoints
-    open_paths = ("/screensaver", "/api/auth/", "/api/image/", "/favicon")
+    open_paths = ("/screensaver", "/api/auth/", "/favicon")
     if any(path.startswith(p) for p in open_paths):
+        return await call_next(request)
+    if path.startswith("/api/image/") and request.method == "GET":
         return await call_next(request)
     # No accounts in DB = first run, setup page is open
     if not has_accounts():
@@ -1578,6 +1581,107 @@ async def api_image_hero(appid: int):
         url=f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/library_hero_2x.jpg",
         status_code=302)
 
+
+@app.get("/api/image/{appid}/options")
+async def api_image_options(appid: int):
+    """Return all available image options for a game's screensaver image."""
+    result = {"appid": appid, "current": None, "cached": [], "screenshots": [], "header": None}
+
+    # Current selected + all cached
+    cached = get_all_cached_heroes(appid)
+    result["cached"] = cached
+    current = next((c for c in cached if c.get("selected")), cached[0] if cached else None)
+    result["current"] = current
+
+    # Screenshot thumbnails from enrichment data
+    from pss.database import get_db
+    with get_db() as db:
+        row = db.execute("SELECT screenshots FROM enrichment WHERE appid = ?", (appid,)).fetchone()
+    if row and row["screenshots"]:
+        try:
+            thumbs = json.loads(row["screenshots"])
+            result["screenshots"] = [{"thumb": t, "full": re.sub(r'\.\d+x\d+\.', '.1920x1080.', t)} for t in thumbs]
+        except Exception:
+            pass
+
+    # SGDB alternatives (live API call, if key configured)
+    sgdb_key = get_sgdb_key()
+    if sgdb_key:
+        heroes = fetch_sgdb_heroes(appid, sgdb_key)
+        if heroes and heroes != "RATE_LIMITED":
+            result["sgdb"] = [{"url": h.get("url",""), "thumb": h.get("thumb",""),
+                               "width": h.get("width",0), "height": h.get("height",0),
+                               "score": h.get("score",0), "style": h.get("style","")}
+                              for h in heroes[:12]]
+        elif heroes == "RATE_LIMITED":
+            result["sgdb_error"] = "rate_limited"
+    else:
+        result["sgdb"] = []
+
+    # Header fallback URL
+    result["header"] = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"
+
+    return JSONResponse(result)
+
+
+@app.post("/api/image/{appid}/select")
+async def api_image_select(appid: int, request: Request):
+    """Select an image for a game. Downloads it and sets as active.
+    Body: {source: 'sgdb'|'screenshot'|'header'|'reset', url: '...'} """
+    body = await request.json()
+    source = body.get("source", "")
+    url = body.get("url", "")
+
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    local_path = str(CACHE_DIR / f"{appid}.jpg")
+
+    if source == "reset":
+        # Delete cached file + DB entries, re-run auto-select
+        if Path(local_path).exists():
+            Path(local_path).unlink()
+        delete_cached_images(appid)
+        result = cache_image_for_appid(appid)
+        return JSONResponse({"ok": True, "result": result or "no_image"})
+
+    if not url:
+        return JSONResponse({"error": "url required"}, status_code=400)
+
+    # Download the image
+    if not download_image(url, local_path):
+        return JSONResponse({"error": "Failed to download image"}, status_code=502)
+
+    # Upsert into cache DB + set as selected
+    upsert_image_cache(appid, source, url, local_path, selected=True)
+    select_cached_image(appid, source, url)
+
+    return JSONResponse({"ok": True, "source": source})
+
+
+@app.post("/api/image/{appid}/upload")
+async def api_image_upload(appid: int, file: UploadFile = File(...)):
+    """Upload a custom image for a game."""
+    # Validate it's an image
+    if not file.content_type or not file.content_type.startswith("image/"):
+        return JSONResponse({"error": "File must be an image"}, status_code=400)
+
+    data = await file.read()
+    if len(data) < 1000:
+        return JSONResponse({"error": "File too small"}, status_code=400)
+    if len(data) > 10 * 1024 * 1024:
+        return JSONResponse({"error": "File too large (max 10MB)"}, status_code=400)
+
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    local_path = str(CACHE_DIR / f"{appid}.jpg")
+
+    with open(local_path, "wb") as f:
+        f.write(data)
+
+    # Record in DB as custom source
+    custom_url = f"custom://{appid}"
+    upsert_image_cache(appid, "custom", custom_url, local_path, selected=True)
+    select_cached_image(appid, "custom", custom_url)
+
+    return JSONResponse({"ok": True, "source": "custom"})
 @app.post("/api/cache/start")
 async def api_cache_start():
     global cache_thread

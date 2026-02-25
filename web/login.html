@@ -7,25 +7,19 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--text-dim:#8b949e;
-      --accent:#58a6ff;--green:#3fb950;--red:#f85149}
+      --accent:#58a6ff;--green:#3fb950;--red:#f85149;--steam:#171a21}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
      display:flex;align-items:center;justify-content:center;min-height:100vh}
 .login-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:40px;
            width:100%;max-width:380px;text-align:center}
 .login-box h1{font-size:1.4rem;margin-bottom:6px}
-.login-box .sub{font-size:.8rem;color:var(--text-dim);margin-bottom:24px}
-.field{margin-bottom:16px;text-align:left}
-.field label{font-size:.75rem;color:var(--text-dim);display:block;margin-bottom:4px}
-.field input[type="password"]{width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);
-    border-radius:6px;color:var(--text);font-size:.9rem;outline:none}
-.field input:focus{border-color:var(--accent)}
-.remember{display:flex;align-items:center;gap:6px;margin-bottom:20px;font-size:.78rem;color:var(--text-dim)}
-.remember input{accent-color:var(--accent)}
-.btn{width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:6px;
-     font-size:.9rem;font-weight:600;cursor:pointer;transition:opacity .15s}
-.btn:hover{opacity:.85}
-.btn:disabled{opacity:.5;cursor:default}
-.error{color:var(--red);font-size:.78rem;margin-top:12px;min-height:1.2em}
+.login-box .sub{font-size:.8rem;color:var(--text-dim);margin-bottom:28px}
+.steam-btn{display:inline-flex;align-items:center;gap:10px;padding:12px 28px;
+  background:var(--steam);border:1px solid #2a475e;border-radius:6px;color:#c7d5e0;
+  font-size:.95rem;font-weight:600;cursor:pointer;text-decoration:none;transition:all .15s}
+.steam-btn:hover{background:#1b2838;border-color:#66c0f4;color:#fff}
+.steam-btn svg{width:24px;height:24px;fill:currentColor}
+.info{font-size:.72rem;color:var(--text-dim);margin-top:20px;line-height:1.5}
 .logo{font-size:2rem;margin-bottom:12px}
 </style>
 </head>
@@ -33,42 +27,15 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 <div class="login-box">
   <div class="logo">🎮</div>
   <h1>PSS Customizer</h1>
-  <div class="sub">Enter admin password to continue</div>
-  <form id="login-form" onsubmit="doLogin(event)">
-    <div class="field">
-      <label>Password</label>
-      <input type="password" id="pw" autofocus autocomplete="current-password">
-    </div>
-    <div class="remember">
-      <input type="checkbox" id="remember" checked>
-      <label for="remember">Remember me (7 days)</label>
-    </div>
-    <button class="btn" type="submit" id="login-btn">Log In</button>
-  </form>
-  <div class="error" id="error"></div>
+  <div class="sub">Sign in to manage your screensaver</div>
+  <a href="/api/auth/steam/login" class="steam-btn">
+    <svg viewBox="0 0 256 259"><path d="M128.079 0C58.262 0 1.469 53.47.08 122.16l68.879 28.47a36.2 36.2 0 0 1 20.48-6.32c.69 0 1.37.03 2.05.07l30.64-44.39v-.62c0-26.32 21.42-47.73 47.73-47.73 26.32 0 47.75 21.42 47.75 47.78 0 26.32-21.43 47.73-47.75 47.73h-1.11l-43.68 31.19c0 .54.03 1.07.03 1.61 0 19.74-16.04 35.82-35.82 35.82-17.4 0-31.94-12.49-35.18-28.97L2.32 163.88C17.24 217.29 67.09 258.39 128.08 258.39c71.07 0 128.68-57.6 128.68-128.7C256.76 57.6 199.15 0 128.08 0"/></svg>
+    Sign in with Steam
+  </a>
+  <div class="info">
+    Only Steam accounts registered on this machine can sign in.<br>
+    The screensaver remains accessible without login.
+  </div>
 </div>
-<script>
-async function doLogin(e) {
-  e.preventDefault();
-  const pw = document.getElementById('pw').value;
-  const remember = document.getElementById('remember').checked;
-  const btn = document.getElementById('login-btn');
-  const err = document.getElementById('error');
-  if (!pw) { err.textContent = 'Enter a password'; return; }
-  btn.disabled = true; err.textContent = '';
-  try {
-    const r = await fetch('/api/auth/login', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({password: pw, remember})
-    });
-    const d = await r.json();
-    if (d.ok) { window.location.href = '/customizer'; }
-    else { err.textContent = d.error || 'Login failed'; btn.disabled = false; }
-  } catch(e) { err.textContent = 'Connection error'; btn.disabled = false; }
-}
-document.getElementById('pw').addEventListener('keydown', e => {
-  if (e.key === 'Enter') doLogin(e);
-});
-</script>
 </body>
 </html>

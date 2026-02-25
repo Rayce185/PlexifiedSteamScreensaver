@@ -1,6 +1,6 @@
 """PSS Server -- FastAPI replacement for game_server.py v2."""
 
-import json, os, re, logging, threading, time, hashlib, secrets, urllib.request, urllib.error
+import json, os, re, logging, threading, time, secrets, urllib.request, urllib.error, urllib.parse
 from pathlib import Path
 from datetime import datetime
 import asyncio
@@ -650,49 +650,37 @@ def deck_worker():
 
 
 
-# === AUTH ===
+# === AUTH (Steam OpenID) ===
 SESSION_COOKIE = "pss_session"
 SESSION_EXPIRY_DAYS = 7
+STEAM_OPENID_URL = "https://steamcommunity.com/openid/login"
 
-def hash_password(password: str) -> str:
-    """Hash password with PBKDF2-HMAC-SHA256 + random salt."""
-    salt = secrets.token_hex(16)
-    h = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 200000)
-    return f"{salt}:{h.hex()}"
-
-def verify_password(password: str, stored: str) -> bool:
-    """Verify password against stored hash."""
-    try:
-        salt, h = stored.split(":", 1)
-        check = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 200000)
-        return secrets.compare_digest(check.hex(), h)
-    except Exception:
-        return False
-
-def create_session() -> str:
-    """Create a new session token and store it."""
+def create_session(steamid64: str) -> str:
+    """Create a session token tied to a SteamID64."""
     token = secrets.token_hex(32)
     from datetime import timedelta
     expiry = (datetime.utcnow() + timedelta(days=SESSION_EXPIRY_DAYS)).isoformat()
-    set_config({"session_token": token, "session_expiry": expiry}, scope="session")
+    set_config({"session_token": token, "session_steamid64": steamid64,
+                "session_expiry": expiry}, scope="session")
     return token
 
-def verify_session(token: str) -> bool:
-    """Verify a session token is valid and not expired."""
+def verify_session(token: str) -> dict | None:
+    """Verify session token. Returns {steamid64} if valid, None if not."""
     if not token:
-        return False
+        return None
     stored = get_config("session")
     if stored.get("session_token") != token:
-        return False
+        return None
     expiry_str = stored.get("session_expiry", "")
     if expiry_str:
         try:
             expiry = datetime.fromisoformat(expiry_str)
             if datetime.utcnow() > expiry:
-                return False
+                return None
         except Exception:
             pass
-    return True
+    sid = stored.get("session_steamid64")
+    return {"steamid64": sid} if sid else None
 
 def invalidate_sessions():
     """Clear all sessions."""
@@ -700,14 +688,54 @@ def invalidate_sessions():
     with get_db() as db:
         db.execute("DELETE FROM config WHERE scope = 'session'")
 
-def is_setup_complete() -> bool:
-    """Check if admin password has been set."""
-    cfg = get_config("global")
-    return bool(cfg.get("admin_password_hash"))
+def has_accounts() -> bool:
+    """Check if any accounts exist in DB (setup is complete)."""
+    return bool(get_all_accounts())
 
-def get_session_from_request(request) -> str:
-    """Extract session token from cookie."""
-    return request.cookies.get(SESSION_COOKIE, "")
+def get_session_from_request(request) -> dict | None:
+    """Extract and verify session from cookie. Returns {steamid64} or None."""
+    token = request.cookies.get(SESSION_COOKIE, "")
+    return verify_session(token)
+
+def build_openid_redirect(return_to: str, realm: str) -> str:
+    """Build Steam OpenID redirect URL."""
+    params = {
+        "openid.ns": "http://specs.openid.net/auth/2.0",
+        "openid.mode": "checkid_setup",
+        "openid.return_to": return_to,
+        "openid.realm": realm,
+        "openid.identity": "http://specs.openid.net/auth/2.0/identifier_select",
+        "openid.claimed_id": "http://specs.openid.net/auth/2.0/identifier_select",
+    }
+    return STEAM_OPENID_URL + "?" + urllib.parse.urlencode(params)
+
+def validate_openid_response(params: dict) -> str | None:
+    """Validate Steam OpenID response. Returns SteamID64 if valid, None if not."""
+    # Must be a positive assertion
+    if params.get("openid.mode") != "id_res":
+        return None
+    # Verify claimed_id is a Steam URL
+    claimed = params.get("openid.claimed_id", "")
+    match = re.match(r"^https://steamcommunity\.com/openid/id/(7656\d{13})$", claimed)
+    if not match:
+        return None
+    steamid64 = match.group(1)
+    # Verify with Steam (check_authentication)
+    verify_params = dict(params)
+    verify_params["openid.mode"] = "check_authentication"
+    post_data = urllib.parse.urlencode(verify_params).encode()
+    try:
+        req = urllib.request.Request(STEAM_OPENID_URL, data=post_data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = resp.read().decode()
+        if "is_valid:true" in body:
+            return steamid64
+        log.warning(f"Steam OpenID validation failed: {body[:200]}")
+        return None
+    except Exception as e:
+        log.error(f"Steam OpenID verification error: {e}")
+        return None
 
 
 # === VDF WATCHDOG ===
@@ -860,29 +888,37 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
-    # Always open: screensaver, static assets, auth endpoints, setup check
+    # Always open: screensaver, static assets, auth endpoints
     open_paths = ("/screensaver", "/api/auth/", "/favicon")
     if any(path.startswith(p) for p in open_paths):
         return await call_next(request)
-    # Setup page: only accessible when no password set
-    if path == "/setup":
-        if is_setup_complete():
-            return RedirectResponse(url="/login")
-        return await call_next(request)
-    # If setup not complete, redirect everything else to /setup
-    if not is_setup_complete():
+    # No accounts in DB = first run, setup page is open
+    if not has_accounts():
+        if path == "/setup" or path.startswith("/api/accounts"):
+            return await call_next(request)
         if path.startswith("/api/"):
             return JSONResponse({"error": "Setup required", "redirect": "/setup"}, status_code=403)
         return RedirectResponse(url="/setup")
-    # Login page: accessible without session
+    # Setup page locks after accounts exist
+    if path == "/setup":
+        return RedirectResponse(url="/login")
+    # Login page: accessible without session, skip if already authed
     if path == "/login":
-        if verify_session(get_session_from_request(request)):
+        if get_session_from_request(request):
             return RedirectResponse(url="/customizer")
         return await call_next(request)
-    # Everything else requires auth
-    if not verify_session(get_session_from_request(request)):
+    # Everything else requires valid Steam session
+    session = get_session_from_request(request)
+    if not session:
         if path.startswith("/api/"):
             return JSONResponse({"error": "Unauthorized", "redirect": "/login"}, status_code=401)
+        return RedirectResponse(url="/login")
+    # Verify the logged-in SteamID is a known account
+    all_ids = {a["steamid64"] for a in get_all_accounts()}
+    if session["steamid64"] not in all_ids:
+        invalidate_sessions()
+        if path.startswith("/api/"):
+            return JSONResponse({"error": "Account not recognized"}, status_code=403)
         return RedirectResponse(url="/login")
     return await call_next(request)
 
@@ -906,14 +942,14 @@ async def customizer():
     return HTMLResponse(content=p.read_text(encoding="utf-8"), headers={"Cache-Control": "no-cache"})
 
 @app.get("/login", response_class=HTMLResponse)
-async def login_page():
+async def login_page(request: Request):
     p = WEB_DIR / "login.html"
     if not p.exists(): return HTMLResponse("<h1>Login page not found</h1>", status_code=500)
     return HTMLResponse(content=p.read_text(encoding="utf-8"), headers={"Cache-Control": "no-cache"})
 
 @app.get("/setup", response_class=HTMLResponse)
 async def setup_page():
-    if is_setup_complete():
+    if has_accounts():
         return RedirectResponse(url="/login")
     p = WEB_DIR / "setup.html"
     if not p.exists(): return HTMLResponse("<h1>Setup page not found</h1>", status_code=500)
@@ -1175,87 +1211,64 @@ async def api_accounts_active():
 
 
 
-# === AUTH API ===
+# === AUTH API (Steam OpenID) ===
 
 @app.get("/api/auth/status")
 async def api_auth_status(request: Request):
-    """Check if setup is done and if user is authenticated."""
-    setup_done = is_setup_complete()
-    authed = verify_session(get_session_from_request(request)) if setup_done else False
-    return JSONResponse({"setup_complete": setup_done, "authenticated": authed})
+    """Check setup and auth state."""
+    session = get_session_from_request(request)
+    return JSONResponse({
+        "setup_complete": has_accounts(),
+        "authenticated": session is not None,
+        "steamid64": session["steamid64"] if session else None
+    })
 
-@app.post("/api/auth/setup")
-async def api_auth_setup(request: Request):
-    """First-time setup: set admin password. Only works if no password exists."""
-    if is_setup_complete():
-        return JSONResponse({"error": "Setup already complete"}, status_code=400)
-    try: data = await request.json()
-    except: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
-    password = data.get("password", "").strip()
-    if len(password) < 4:
-        return JSONResponse({"error": "Password must be at least 4 characters"}, status_code=400)
-    # Hash and store
-    pw_hash = hash_password(password)
-    set_config({"admin_password_hash": pw_hash})
-    log.info("Admin password set during first-run setup")
-    # Auto-login after setup
-    token = create_session()
-    response = JSONResponse({"ok": True, "message": "Setup complete"})
-    response.set_cookie(SESSION_COOKIE, token, max_age=SESSION_EXPIRY_DAYS*86400,
-                        httponly=True, samesite="lax")
-    return response
+@app.get("/api/auth/steam/login")
+async def api_auth_steam_login(request: Request):
+    """Redirect to Steam OpenID login."""
+    # Build return URL from the request origin
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", "localhost:8787"))
+    base = f"{scheme}://{host}"
+    callback = f"{base}/api/auth/steam/callback"
+    redirect_url = build_openid_redirect(callback, base)
+    return RedirectResponse(url=redirect_url)
 
-@app.post("/api/auth/login")
-async def api_auth_login(request: Request):
-    """Authenticate with admin password."""
-    try: data = await request.json()
-    except: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
-    password = data.get("password", "")
-    remember = data.get("remember", False)
-    cfg = get_config("global")
-    stored_hash = cfg.get("admin_password_hash", "")
-    if not stored_hash:
-        return JSONResponse({"error": "No password configured"}, status_code=400)
-    if not verify_password(password, stored_hash):
-        log.warning(f"Failed login attempt from {request.client.host}")
-        return JSONResponse({"error": "Wrong password"}, status_code=401)
-    token = create_session()
-    max_age = SESSION_EXPIRY_DAYS * 86400 if remember else None
-    response = JSONResponse({"ok": True})
-    response.set_cookie(SESSION_COOKIE, token, max_age=max_age,
+@app.get("/api/auth/steam/callback")
+async def api_auth_steam_callback(request: Request):
+    """Handle Steam OpenID callback."""
+    params = dict(request.query_params)
+    steamid64 = validate_openid_response(params)
+    if not steamid64:
+        log.warning(f"Steam OpenID validation failed from {request.client.host}")
+        return HTMLResponse(
+            "<h2>Login failed</h2><p>Steam verification failed.</p>"
+            "<p><a href=\"/login\">Try again</a></p>",
+            status_code=403)
+    # Check if this SteamID is a known account
+    all_accounts = get_all_accounts()
+    known_ids = {a["steamid64"] for a in all_accounts}
+    if steamid64 not in known_ids:
+        log.warning(f"Steam login rejected: {steamid64} not in accounts table")
+        return HTMLResponse(
+            "<h2>Access denied</h2><p>Your Steam account is not configured in PSS.</p>"
+            "<p>Only accounts detected from this machine\'s Steam installation can log in.</p>"
+            "<p><a href=\"/login\">Back</a></p>",
+            status_code=403)
+    # Create session and redirect to customizer
+    token = create_session(steamid64)
+    log.info(f"Steam login: {steamid64} from {request.client.host}")
+    response = RedirectResponse(url="/customizer")
+    response.set_cookie(SESSION_COOKIE, token, max_age=SESSION_EXPIRY_DAYS * 86400,
                         httponly=True, samesite="lax")
-    log.info(f"Admin login from {request.client.host}")
     return response
 
 @app.post("/api/auth/logout")
 async def api_auth_logout():
-    """Logout: invalidate session."""
+    """Logout: clear session."""
     invalidate_sessions()
     response = JSONResponse({"ok": True})
     response.delete_cookie(SESSION_COOKIE)
-    return response
-
-@app.post("/api/auth/change-password")
-async def api_auth_change_password(request: Request):
-    """Change admin password. Requires current password."""
-    try: data = await request.json()
-    except: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
-    current = data.get("current_password", "")
-    new_pw = data.get("new_password", "").strip()
-    cfg = get_config("global")
-    stored_hash = cfg.get("admin_password_hash", "")
-    if not verify_password(current, stored_hash):
-        return JSONResponse({"error": "Current password is wrong"}, status_code=401)
-    if len(new_pw) < 4:
-        return JSONResponse({"error": "New password must be at least 4 characters"}, status_code=400)
-    pw_hash = hash_password(new_pw)
-    set_config({"admin_password_hash": pw_hash})
-    invalidate_sessions()
-    token = create_session()
-    response = JSONResponse({"ok": True, "message": "Password changed"})
-    response.set_cookie(SESSION_COOKIE, token, max_age=SESSION_EXPIRY_DAYS*86400,
-                        httponly=True, samesite="lax")
-    log.info("Admin password changed")
     return response
 
 

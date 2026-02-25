@@ -390,17 +390,6 @@ input[type=file]{display:none}
     </div>
 
     
-    <div class="section-title" style="margin-top:20px">&#128274; Admin</div>
-    <div class="setting-row" style="flex-direction:column;align-items:flex-start;gap:8px">
-      <div><div class="setting-label">Change Password</div></div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input type="password" id="pw-current" placeholder="Current password" style="padding:5px 8px;font-size:.75rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);width:160px">
-        <input type="password" id="pw-new" placeholder="New password" style="padding:5px 8px;font-size:.75rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);width:160px">
-        <button class="btn btn-sm btn-accent" onclick="changePassword()">Change</button>
-      </div>
-      <div id="pw-status" style="font-size:.72rem;min-height:1em"></div>
-    </div>
-
     <div class="section-title" id="sec-timing">&#9201; Timing</div>
     <div class="setting-row"><div><div class="setting-label">Idle activation</div><div class="setting-desc">Mute + screensaver after this idle time</div></div><div class="setting-input"><input type="number" id="s-idle" min="30" max="600" step="10"><span class="setting-unit">sec</span></div></div>
     <div class="setting-row"><div><div class="setting-label">Slide duration</div><div class="setting-desc">How long each game hero is shown</div></div><div class="setting-input"><input type="number" id="s-slide" min="5" max="60" step="1"><span class="setting-unit">sec</span></div></div>
@@ -1666,25 +1655,6 @@ window.doLogout = async function() {
   } catch(e) { window.location.href = '/login'; }
 };
 
-window.changePassword = async function() {
-  const cur = document.getElementById('pw-current').value;
-  const nw = document.getElementById('pw-new').value;
-  const st = document.getElementById('pw-status');
-  if (!cur || !nw) { st.style.color='var(--red)'; st.textContent='Fill in both fields'; return; }
-  if (nw.length < 4) { st.style.color='var(--red)'; st.textContent='Min 4 characters'; return; }
-  try {
-    const r = await fetch('/api/auth/change-password', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({current_password: cur, new_password: nw})
-    });
-    const d = await r.json();
-    if (d.ok) {
-      st.style.color='var(--green)'; st.textContent='Password changed';
-      document.getElementById('pw-current').value='';
-      document.getElementById('pw-new').value='';
-    } else { st.style.color='var(--red)'; st.textContent=d.error||'Failed'; }
-  } catch(e) { st.style.color='var(--red)'; st.textContent='Error'; }
-};
 
 // Handle 401 responses globally (session expired)
 const _origFetch = window.fetch;

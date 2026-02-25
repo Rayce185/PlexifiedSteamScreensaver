@@ -13,157 +13,78 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 .setup-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:40px;
            width:100%;max-width:460px}
 h1{font-size:1.4rem;margin-bottom:4px;text-align:center}
-.sub{font-size:.8rem;color:var(--text-dim);margin-bottom:28px;text-align:center}
-.step{display:none}
-.step.active{display:block}
-.step-title{font-size:1rem;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px}
-.step-num{background:var(--accent);color:#fff;width:24px;height:24px;border-radius:50%;display:inline-flex;
-          align-items:center;justify-content:center;font-size:.75rem;font-weight:700}
-.field{margin-bottom:14px}
-.field label{font-size:.75rem;color:var(--text-dim);display:block;margin-bottom:4px}
-.field input{width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);
-    border-radius:6px;color:var(--text);font-size:.85rem;outline:none;font-family:monospace}
-.field input:focus{border-color:var(--accent)}
-.field .hint{font-size:.7rem;color:var(--text-dim);margin-top:4px}
-.btn-row{display:flex;gap:8px;margin-top:20px}
+.sub{font-size:.8rem;color:var(--text-dim);margin-bottom:24px;text-align:center}
+.section{margin-bottom:20px}
+.section-title{font-size:.9rem;font-weight:600;margin-bottom:10px}
+.detected{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin:6px 0;font-size:.8rem}
+.detected .name{font-weight:600}
+.detected .id{font-size:.7rem;color:var(--text-dim);font-family:monospace}
 .btn{padding:10px 20px;border:none;border-radius:6px;font-size:.85rem;font-weight:600;cursor:pointer;transition:opacity .15s}
 .btn:hover{opacity:.85}
-.btn:disabled{opacity:.5;cursor:default}
-.btn-accent{background:var(--accent);color:#fff;flex:1}
+.btn-accent{background:var(--accent);color:#fff}
 .btn-dim{background:rgba(255,255,255,.06);color:var(--text-dim)}
-.status{font-size:.78rem;margin-top:10px;min-height:1.4em}
+.status{font-size:.78rem;margin-top:8px;min-height:1.4em}
 .status.ok{color:var(--green)}
 .status.err{color:var(--red)}
 .status.info{color:var(--text-dim)}
-.detected{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin:10px 0;font-size:.8rem}
-.detected .name{font-weight:600}
-.detected .id{font-size:.7rem;color:var(--text-faint,var(--text-dim));font-family:monospace}
 .logo{font-size:2.4rem;text-align:center;margin-bottom:8px}
-.progress-dots{display:flex;justify-content:center;gap:8px;margin-bottom:24px}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--border)}
-.dot.done{background:var(--green)}
-.dot.current{background:var(--accent)}
+.info{font-size:.72rem;color:var(--text-dim);line-height:1.5;margin-top:16px}
+.btn-row{display:flex;gap:8px;margin-top:16px}
 </style>
 </head>
 <body>
 <div class="setup-box">
   <div class="logo">🎮</div>
   <h1>PSS Setup</h1>
-  <div class="sub">First-time configuration</div>
-  <div class="progress-dots" id="dots">
-    <div class="dot current"></div><div class="dot"></div><div class="dot"></div>
-  </div>
+  <div class="sub">No Steam accounts detected yet</div>
 
-  <!-- Step 1: Admin Password -->
-  <div class="step active" id="step-1">
-    <div class="step-title"><span class="step-num">1</span> Set Admin Password</div>
-    <div class="field">
-      <label>Password (min 4 characters)</label>
-      <input type="password" id="s-pw1" autofocus placeholder="Choose a password...">
-    </div>
-    <div class="field">
-      <label>Confirm Password</label>
-      <input type="password" id="s-pw2" placeholder="Repeat password...">
-    </div>
-    <div class="status" id="s1-status"></div>
-    <div class="btn-row">
-      <button class="btn btn-accent" onclick="doStep1()">Set Password & Continue</button>
-    </div>
-  </div>
-
-  <!-- Step 2: Detected Accounts -->
-  <div class="step" id="step-2">
-    <div class="step-title"><span class="step-num">2</span> Steam Accounts Detected</div>
-    <div id="detected-accounts" class="status info">Loading...</div>
-    <div class="status" id="s2-status"></div>
-    <div class="btn-row">
-      <button class="btn btn-accent" onclick="doStep2()">Continue</button>
-    </div>
-  </div>
-
-  <!-- Step 3: Done -->
-  <div class="step" id="step-3">
-    <div class="step-title"><span class="step-num">3</span> Setup Complete</div>
-    <p style="font-size:.85rem;color:var(--text-dim);margin-bottom:12px">
-      You're all set. The customizer will manage your game library, display settings, and enrichment.
+  <div class="section">
+    <div class="section-title">Steam Account Detection</div>
+    <p style="font-size:.8rem;color:var(--text-dim);margin-bottom:12px">
+      PSS reads your Steam installation to find logged-in accounts. Make sure Steam has been
+      opened and logged into at least once on this machine.
     </p>
-    <div id="summary" style="font-size:.8rem;margin-bottom:16px"></div>
-    <div class="btn-row">
-      <button class="btn btn-accent" onclick="window.location.href='/customizer'">Open Customizer</button>
+    <div id="accounts-area">
+      <div class="status info">Click detect to scan for accounts...</div>
     </div>
+    <div class="btn-row">
+      <button class="btn btn-accent" onclick="detect()">🔍 Detect Steam Accounts</button>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+
+  <div class="info">
+    <strong>How it works:</strong> PSS finds accounts from Steam's <code>loginusers.vdf</code> file.
+    Once detected, you'll sign in via Steam to access the customizer. The screensaver itself
+    is always accessible without login.
   </div>
 </div>
 <script>
-let currentStep = 1;
-
-function showStep(n) {
-  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
-  document.getElementById('step-' + n).classList.add('active');
-  const dots = document.querySelectorAll('.dot');
-  dots.forEach((d, i) => {
-    d.className = 'dot' + (i < n - 1 ? ' done' : (i === n - 1 ? ' current' : ''));
-  });
-  currentStep = n;
-}
-
-async function doStep1() {
-  const pw1 = document.getElementById('s-pw1').value;
-  const pw2 = document.getElementById('s-pw2').value;
-  const st = document.getElementById('s1-status');
-  if (pw1.length < 4) { st.className = 'status err'; st.textContent = 'Min 4 characters'; return; }
-  if (pw1 !== pw2) { st.className = 'status err'; st.textContent = 'Passwords don\'t match'; return; }
-  st.className = 'status info'; st.textContent = 'Setting up...';
+async function detect() {
+  const st = document.getElementById('status');
+  const area = document.getElementById('accounts-area');
+  st.className = 'status info'; st.textContent = 'Scanning...';
   try {
-    const r = await fetch('/api/auth/setup', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({password: pw1})
-    });
-    const d = await r.json();
-    if (d.ok) {
-      st.className = 'status ok'; st.textContent = 'Password set!';
-      setTimeout(() => { showStep(2); loadAccounts(); }, 500);
-    } else { st.className = 'status err'; st.textContent = d.error || 'Failed'; }
-  } catch(e) { st.className = 'status err'; st.textContent = 'Connection error'; }
-}
-
-async function loadAccounts() {
-  const el = document.getElementById('detected-accounts');
-  try {
-    const r = await fetch('/api/accounts');
+    const r = await fetch('/api/accounts/detect');
     const data = await r.json();
     const accts = data.accounts || [];
     if (!accts.length) {
-      el.innerHTML = '<div style="color:var(--text-dim)">No Steam accounts detected. Make sure Steam is installed and has been logged into at least once.</div>';
-    } else {
-      el.innerHTML = accts.map(a =>
-        '<div class="detected"><div class="name">' + (a.persona_name || 'Unknown') +
-        (a.is_active ? ' <span style="color:var(--green);font-size:.7rem">● active</span>' : '') +
-        '</div><div class="id">' + a.steamid64 + '</div>' +
-        '<div style="color:var(--text-dim);font-size:.72rem">' + (a.game_count || 0) + ' games</div></div>'
-      ).join('');
+      area.innerHTML = '<div class="status err">No accounts found. Is Steam installed and has it been logged into?</div>';
+      st.className = 'status err'; st.textContent = 'Check your Steam installation path.';
+      return;
     }
-    window._setupAccounts = accts;
-  } catch(e) { el.innerHTML = '<div style="color:var(--red)">Failed to load accounts</div>'; }
+    area.innerHTML = accts.map(a =>
+      '<div class="detected"><div class="name">' + (a.persona_name || 'Unknown') +
+      (a.is_active ? ' <span style="color:var(--green)">● active</span>' : '') +
+      '</div><div class="id">' + a.steamid64 + '</div></div>'
+    ).join('');
+    st.className = 'status ok';
+    st.textContent = accts.length + ' account(s) found! Redirecting to login...';
+    setTimeout(() => { window.location.href = '/login'; }, 1500);
+  } catch(e) {
+    st.className = 'status err'; st.textContent = 'Detection failed: ' + e.message;
+  }
 }
-
-function doStep2() {
-  const accts = window._setupAccounts || [];
-  const summary = document.getElementById('summary');
-  const parts = [];
-  if (accts.length) parts.push(accts.length + ' Steam account(s) detected');
-  const active = accts.find(a => a.is_active);
-  if (active) parts.push('Active: ' + (active.persona_name || active.steamid64));
-  summary.innerHTML = parts.length ? parts.map(p => '<div>✓ ' + p + '</div>').join('') : '';
-  showStep(3);
-}
-
-// Enter key support
-document.getElementById('s-pw2').addEventListener('keydown', e => {
-  if (e.key === 'Enter') doStep1();
-});
-document.getElementById('s-pw1').addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('s-pw2').focus();
-});
 </script>
 </body>
 </html>

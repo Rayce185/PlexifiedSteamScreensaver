@@ -477,7 +477,7 @@ input[type=file]{display:none}
       <div id="cache-msg" class="enrich-status"></div>
       <div class="enrich-details" id="cache-details" style="display:none">
         <div>Progress: <span id="cache-prog-nums">0/0</span>&nbsp;&nbsp;Current: <span id="cache-current">-</span>&nbsp;&nbsp;ETA: <span id="cache-eta">-</span></div>
-        <div>SGDB: <span id="cache-sgdb">0</span>&nbsp;&nbsp;CDN: <span id="cache-cdn">0</span>&nbsp;&nbsp;Skipped: <span id="cache-skipped">0</span></div>
+        <div>SGDB: <span id="cache-sgdb">0</span>&nbsp;&nbsp;Screenshots: <span id="cache-ss">0</span>&nbsp;&nbsp;Headers: <span id="cache-hdr">0</span>&nbsp;&nbsp;Skipped: <span id="cache-skipped">0</span></div>
       </div>
       <div id="cache-stats" style="font-size:.72rem;color:var(--text-dim);margin-top:6px"></div>
     </div>
@@ -1733,7 +1733,8 @@ async function pollCache() {
     document.getElementById('cache-current').textContent = s.current_game || '-';
     document.getElementById('cache-eta').textContent = s.eta_seconds > 0 ? fmtTime(s.eta_seconds) : '-';
     document.getElementById('cache-sgdb').textContent = s.sgdb_hits || 0;
-    document.getElementById('cache-cdn').textContent = s.cdn_hits || 0;
+    document.getElementById('cache-ss').textContent = s.screenshot_hits || 0;
+    document.getElementById('cache-hdr').textContent = s.header_hits || 0;
     document.getElementById('cache-skipped').textContent = s.skipped || 0;
     if (s.stats) {
       document.getElementById('cache-stats').textContent =

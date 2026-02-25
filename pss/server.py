@@ -664,7 +664,7 @@ cache_state = {
     "current_game": "", "current_appid": 0,
     "started_at": None, "eta_seconds": 0,
     "phase": "idle", "message": "",
-    "sgdb_hits": 0, "cdn_hits": 0
+    "sgdb_hits": 0, "screenshot_hits": 0, "header_hits": 0
 }
 cache_lock = threading.Lock()
 cache_thread = None
@@ -717,9 +717,33 @@ def download_image(url, local_path):
         return False
 
 
-def cache_hero_for_appid(appid, name=""):
-    """Cache the best hero image for an appid. Tries SGDB first, then Steam CDN.
-    Returns: 'sgdb', 'cdn', or None."""
+def get_screenshot_urls(appid):
+    """Get full-size screenshot URLs from enrichment data.
+    Converts thumbnail URLs (600x338) to full-size (1920x1080)."""
+    from pss.database import get_db
+    with get_db() as db:
+        row = db.execute("SELECT screenshots FROM enrichment WHERE appid = ?", (appid,)).fetchone()
+    if not row or not row["screenshots"]:
+        return []
+    try:
+        thumbs = json.loads(row["screenshots"])
+    except:
+        return []
+    full_urls = []
+    for t in thumbs:
+        # Convert .600x338.jpg or .116x65.jpg to .1920x1080.jpg
+        full = re.sub(r'\.\d+x\d+\.', '.1920x1080.', t)
+        if full != t:
+            full_urls.append(full)
+        else:
+            full_urls.append(t)  # Use as-is if no size suffix found
+    return full_urls
+
+
+def cache_image_for_appid(appid, name=""):
+    """Cache the best 16:9 image for an appid.
+    Priority: SteamGridDB heroes (16:9 filtered) > Steam screenshots (16:9 native) > header.
+    Returns: 'sgdb', 'screenshot', 'header', or None."""
     cache_dir = CACHE_DIR
     cache_dir.mkdir(parents=True, exist_ok=True)
     local_path = str(cache_dir / f"{appid}.jpg")
@@ -730,14 +754,20 @@ def cache_hero_for_appid(appid, name=""):
 
     sgdb_key = get_sgdb_key()
 
-    # Try SteamGridDB first
+    # Try SteamGridDB first (heroes, filtered for reasonable aspect ratios)
     if sgdb_key:
         heroes = fetch_sgdb_heroes(appid, sgdb_key)
         if heroes == "RATE_LIMITED":
             return "rate_limited"
         if heroes:
-            # Try top 3 by score
-            for hero in heroes[:3]:
+            # Prefer heroes close to 16:9 (ratio 1.5 - 2.0)
+            for hero in heroes[:5]:
+                w = hero.get("width", 0)
+                h = hero.get("height", 0)
+                if w > 0 and h > 0:
+                    ratio = w / h
+                    if ratio > 2.0 or ratio < 1.3:
+                        continue  # Skip ultra-wide or too-square
                 hero_url = hero.get("url", "")
                 if hero_url and download_image(hero_url, local_path):
                     upsert_image_cache(appid, "sgdb", hero_url, local_path,
@@ -746,17 +776,20 @@ def cache_hero_for_appid(appid, name=""):
                                        selected=True)
                     return "sgdb"
 
-    # Fall back to Steam CDN
-    cdn_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/library_hero_2x.jpg"
-    if download_image(cdn_url, local_path):
-        upsert_image_cache(appid, "steam_cdn", cdn_url, local_path, selected=True)
-        return "cdn"
+    # Try Steam screenshots (natively 16:9, 1920x1080)
+    ss_urls = get_screenshot_urls(appid)
+    for url in ss_urls[:3]:
+        if download_image(url, local_path):
+            upsert_image_cache(appid, "screenshot", url, local_path, selected=True,
+                               width=1920, height=1080)
+            return "screenshot"
 
-    # Try 1x as last resort
-    cdn_url_1x = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/library_hero.jpg"
-    if download_image(cdn_url_1x, local_path):
-        upsert_image_cache(appid, "steam_cdn", cdn_url_1x, local_path, selected=True)
-        return "cdn"
+    # Last resort: Steam header image (460x215, ~2:1 but better than nothing)
+    header_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"
+    if download_image(header_url, local_path):
+        upsert_image_cache(appid, "header", header_url, local_path, selected=True,
+                           width=460, height=215)
+        return "header"
 
     return None
 
@@ -775,7 +808,7 @@ def image_cache_worker():
 
     with cache_lock:
         cache_state.update(total=len(to_cache), completed=0, errors=0, skipped=0,
-            sgdb_hits=0, cdn_hits=0,
+            sgdb_hits=0, screenshot_hits=0, header_hits=0,
             phase="running",
             message=f"Caching heroes for {len(to_cache)} games"
                     + (f" (SteamGridDB {'enabled' if sgdb_key else 'disabled'})"),
@@ -796,20 +829,22 @@ def image_cache_worker():
             if i > 0:
                 cache_state["eta_seconds"] = int((len(to_cache) - i) * (elapsed / i))
 
-        result = cache_hero_for_appid(appid, name)
+        result = cache_image_for_appid(appid, name)
 
         if result == "rate_limited":
             with cache_lock:
                 cache_state.update(phase="rate_limited", message="SteamGridDB rate limited, waiting 30s...")
             time.sleep(30)
-            result = cache_hero_for_appid(appid, name)
+            result = cache_image_for_appid(appid, name)
             with cache_lock:
                 cache_state["phase"] = "running"
 
         if result == "sgdb":
             with cache_lock: cache_state["sgdb_hits"] += 1
-        elif result == "cdn":
-            with cache_lock: cache_state["cdn_hits"] += 1
+        elif result == "screenshot":
+            with cache_lock: cache_state["screenshot_hits"] += 1
+        elif result == "header":
+            with cache_lock: cache_state["header_hits"] += 1
         elif result is None:
             with cache_lock: cache_state["skipped"] += 1
 
@@ -823,10 +858,10 @@ def image_cache_worker():
 
     with cache_lock:
         cache_state.update(completed=len(to_cache), phase="complete", running=False,
-            message=f"Done! SGDB: {cache_state['sgdb_hits']}, CDN: {cache_state['cdn_hits']}, "
+            message=f"Done! SGDB: {cache_state['sgdb_hits']}, Screenshots: {cache_state['screenshot_hits']}, "
                     f"skipped: {cache_state['skipped']}")
     log.info(f"Image cache complete: SGDB={cache_state['sgdb_hits']}, "
-             f"CDN={cache_state['cdn_hits']}, skipped={cache_state['skipped']}")
+             f"Screenshots={cache_state['screenshot_hits']}, Headers={cache_state['header_hits']}, skipped={cache_state['skipped']}")
 
 
 # === AUTH (Steam OpenID) ===
@@ -1551,7 +1586,7 @@ async def api_cache_start():
     with cache_lock:
         cache_state.update(running=True, stop_requested=False, phase="starting",
                            message="Starting image cache...", errors=0, skipped=0,
-                           sgdb_hits=0, cdn_hits=0)
+                           sgdb_hits=0, screenshot_hits=0, header_hits=0)
     cache_thread = threading.Thread(target=image_cache_worker, daemon=True)
     cache_thread.start()
     return JSONResponse({"ok": True, "message": "Image caching started"})

@@ -63,18 +63,21 @@
   function buildKB(s) {
     const st = document.getElementById('kb-style') || document.createElement('style');
     st.id = 'kb-style';
-    // s = intensity (0-1). Zoom range: 1.02 - 1.15 based on intensity.
-    // Pan uses transform-origin to shift viewport across the image.
-    const z = (v) => (1 + v * s * 0.15).toFixed(3);
+    // s = intensity 0-1. For 16:9 on 16:9: zoom in first to create pan margin.
+    // Base zoom = 1.05 + intensity * 0.10 (range 1.05 - 1.15)
+    // Pan by shifting transform-origin edge-to-edge within that zoom overflow.
+    const base = (1.05 + s * 0.10).toFixed(3);
+    const hi = (1.08 + s * 0.12).toFixed(3);
+    const lo = (1.03 + s * 0.07).toFixed(3);
     st.textContent = `
-      @keyframes kb1{from{transform:scale(${z(1)});transform-origin:20% 50%}to{transform:scale(${z(1.1)});transform-origin:80% 50%}}
-      @keyframes kb2{from{transform:scale(${z(1.1)});transform-origin:80% 40%}to{transform:scale(${z(0.8)});transform-origin:20% 60%}}
-      @keyframes kb3{from{transform:scale(${z(0.9)});transform-origin:30% 30%}to{transform:scale(${z(1.15)});transform-origin:70% 70%}}
-      @keyframes kb4{from{transform:scale(${z(1.15)});transform-origin:70% 50%}to{transform:scale(${z(0.9)});transform-origin:30% 50%}}
-      @keyframes kb5{from{transform:scale(${z(1)});transform-origin:50% 30%}to{transform:scale(${z(1.1)});transform-origin:50% 70%}}
-      @keyframes kb6{from{transform:scale(${z(0.8)});transform-origin:15% 50%}to{transform:scale(${z(1.2)});transform-origin:85% 50%}}
-      @keyframes kb7{from{transform:scale(${z(1.2)});transform-origin:85% 40%}to{transform:scale(${z(0.8)});transform-origin:15% 60%}}
-      @keyframes kb8{from{transform:scale(${z(0.95)});transform-origin:40% 40%}to{transform:scale(${z(1.1)});transform-origin:60% 60%}}`;
+      @keyframes kb1{from{transform:scale(${base});transform-origin:0% 50%}to{transform:scale(${hi});transform-origin:100% 50%}}
+      @keyframes kb2{from{transform:scale(${hi});transform-origin:100% 40%}to{transform:scale(${base});transform-origin:0% 60%}}
+      @keyframes kb3{from{transform:scale(${base});transform-origin:10% 20%}to{transform:scale(${hi});transform-origin:90% 80%}}
+      @keyframes kb4{from{transform:scale(${hi});transform-origin:90% 50%}to{transform:scale(${lo});transform-origin:10% 50%}}
+      @keyframes kb5{from{transform:scale(${base});transform-origin:50% 0%}to{transform:scale(${hi});transform-origin:50% 100%}}
+      @keyframes kb6{from{transform:scale(${lo});transform-origin:0% 50%}to{transform:scale(${hi});transform-origin:100% 50%}}
+      @keyframes kb7{from{transform:scale(${hi});transform-origin:100% 30%}to{transform:scale(${lo});transform-origin:0% 70%}}
+      @keyframes kb8{from{transform:scale(${base});transform-origin:30% 30%}to{transform:scale(${hi});transform-origin:70% 70%}}`;
     if(!st.parentNode) document.head.appendChild(st);
   }
 
@@ -205,7 +208,7 @@
     u();setInterval(u,10000);document.getElementById('clock').classList.add('visible');
   }
 
-  function tryImg(g){return new Promise(r=>{const i=new Image();i.onload=()=>r(i.src);i.onerror=()=>{const i2=new Image();i2.onload=()=>r(i2.src);i2.onerror=()=>{const i3=new Image();i3.onload=()=>r(i3.src);i3.onerror=()=>r(null);i3.src=g.hero_1x};i2.src=g.hero_2x};i.src='/api/image/'+g.appid+'/hero'})}
+  function tryImg(g){return new Promise(r=>{const i=new Image();i.onload=()=>r(i.src);i.onerror=()=>{const i2=new Image();i2.onload=()=>r(i2.src);i2.onerror=()=>r(null);i2.src=g.header};i.src='/api/image/'+g.appid+'/hero'})}
 
   async function preload(i){const g=games[i];const url=await tryImg(g);if(!url){next();return}const ld=document.getElementById('loading');if(!ld.classList.contains('hidden'))ld.classList.add('hidden');show(url,g)}
 

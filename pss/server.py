@@ -854,11 +854,11 @@ def image_cache_worker():
 
         if (i + 1) % 100 == 0:
             log.info(f"Image cache checkpoint: {i+1}/{len(to_cache)} "
-                     f"(SGDB: {cache_state['sgdb_hits']}, CDN: {cache_state['cdn_hits']})")
+                     f"(SGDB: {cache_state['sgdb_hits']}, SS: {cache_state['screenshot_hits']}, HDR: {cache_state['header_hits']})")
 
     with cache_lock:
         cache_state.update(completed=len(to_cache), phase="complete", running=False,
-            message=f"Done! SGDB: {cache_state['sgdb_hits']}, Screenshots: {cache_state['screenshot_hits']}, "
+            message=f"Done! SGDB: {cache_state['sgdb_hits']}, Screenshots: {cache_state['screenshot_hits']}, Headers: {cache_state['header_hits']}, "
                     f"skipped: {cache_state['skipped']}")
     log.info(f"Image cache complete: SGDB={cache_state['sgdb_hits']}, "
              f"Screenshots={cache_state['screenshot_hits']}, Headers={cache_state['header_hits']}, skipped={cache_state['skipped']}")

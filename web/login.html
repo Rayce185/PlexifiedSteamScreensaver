@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSS — Login</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--text-dim:#8b949e;
+      --accent:#58a6ff;--green:#3fb950;--red:#f85149}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+     display:flex;align-items:center;justify-content:center;min-height:100vh}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:40px;
+           width:100%;max-width:380px;text-align:center}
+.login-box h1{font-size:1.4rem;margin-bottom:6px}
+.login-box .sub{font-size:.8rem;color:var(--text-dim);margin-bottom:24px}
+.field{margin-bottom:16px;text-align:left}
+.field label{font-size:.75rem;color:var(--text-dim);display:block;margin-bottom:4px}
+.field input[type="password"]{width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);
+    border-radius:6px;color:var(--text);font-size:.9rem;outline:none}
+.field input:focus{border-color:var(--accent)}
+.remember{display:flex;align-items:center;gap:6px;margin-bottom:20px;font-size:.78rem;color:var(--text-dim)}
+.remember input{accent-color:var(--accent)}
+.btn{width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:6px;
+     font-size:.9rem;font-weight:600;cursor:pointer;transition:opacity .15s}
+.btn:hover{opacity:.85}
+.btn:disabled{opacity:.5;cursor:default}
+.error{color:var(--red);font-size:.78rem;margin-top:12px;min-height:1.2em}
+.logo{font-size:2rem;margin-bottom:12px}
+</style>
+</head>
+<body>
+<div class="login-box">
+  <div class="logo">🎮</div>
+  <h1>PSS Customizer</h1>
+  <div class="sub">Enter admin password to continue</div>
+  <form id="login-form" onsubmit="doLogin(event)">
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="pw" autofocus autocomplete="current-password">
+    </div>
+    <div class="remember">
+      <input type="checkbox" id="remember" checked>
+      <label for="remember">Remember me (7 days)</label>
+    </div>
+    <button class="btn" type="submit" id="login-btn">Log In</button>
+  </form>
+  <div class="error" id="error"></div>
+</div>
+<script>
+async function doLogin(e) {
+  e.preventDefault();
+  const pw = document.getElementById('pw').value;
+  const remember = document.getElementById('remember').checked;
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('error');
+  if (!pw) { err.textContent = 'Enter a password'; return; }
+  btn.disabled = true; err.textContent = '';
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({password: pw, remember})
+    });
+    const d = await r.json();
+    if (d.ok) { window.location.href = '/customizer'; }
+    else { err.textContent = d.error || 'Login failed'; btn.disabled = false; }
+  } catch(e) { err.textContent = 'Connection error'; btn.disabled = false; }
+}
+document.getElementById('pw').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin(e);
+});
+</script>
+</body>
+</html>

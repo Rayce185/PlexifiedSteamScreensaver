@@ -1,6 +1,6 @@
 """PSS Server -- FastAPI replacement for game_server.py v2."""
 
-import json, os, re, logging, threading, time, urllib.request, urllib.error
+import json, os, re, logging, threading, time, hashlib, secrets, urllib.request, urllib.error
 from pathlib import Path
 from datetime import datetime
 import asyncio
@@ -649,6 +649,67 @@ def deck_worker():
 
 
 
+
+# === AUTH ===
+SESSION_COOKIE = "pss_session"
+SESSION_EXPIRY_DAYS = 7
+
+def hash_password(password: str) -> str:
+    """Hash password with PBKDF2-HMAC-SHA256 + random salt."""
+    salt = secrets.token_hex(16)
+    h = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 200000)
+    return f"{salt}:{h.hex()}"
+
+def verify_password(password: str, stored: str) -> bool:
+    """Verify password against stored hash."""
+    try:
+        salt, h = stored.split(":", 1)
+        check = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 200000)
+        return secrets.compare_digest(check.hex(), h)
+    except Exception:
+        return False
+
+def create_session() -> str:
+    """Create a new session token and store it."""
+    token = secrets.token_hex(32)
+    from datetime import timedelta
+    expiry = (datetime.utcnow() + timedelta(days=SESSION_EXPIRY_DAYS)).isoformat()
+    set_config({"session_token": token, "session_expiry": expiry}, scope="session")
+    return token
+
+def verify_session(token: str) -> bool:
+    """Verify a session token is valid and not expired."""
+    if not token:
+        return False
+    stored = get_config("session")
+    if stored.get("session_token") != token:
+        return False
+    expiry_str = stored.get("session_expiry", "")
+    if expiry_str:
+        try:
+            expiry = datetime.fromisoformat(expiry_str)
+            if datetime.utcnow() > expiry:
+                return False
+        except Exception:
+            pass
+    return True
+
+def invalidate_sessions():
+    """Clear all sessions."""
+    from pss.database import get_db
+    with get_db() as db:
+        db.execute("DELETE FROM config WHERE scope = 'session'")
+
+def is_setup_complete() -> bool:
+    """Check if admin password has been set."""
+    cfg = get_config("global")
+    return bool(cfg.get("admin_password_hash"))
+
+def get_session_from_request(request) -> str:
+    """Extract session token from cookie."""
+    return request.cookies.get(SESSION_COOKIE, "")
+
+
 # === VDF WATCHDOG ===
 watchdog_state = {
     "last_check": None, "last_active": None, "interval": 30,
@@ -794,6 +855,38 @@ app = FastAPI(title="PSS", version="0.2.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
+
+# Auth middleware
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    # Always open: screensaver, static assets, auth endpoints, setup check
+    open_paths = ("/screensaver", "/api/auth/", "/favicon")
+    if any(path.startswith(p) for p in open_paths):
+        return await call_next(request)
+    # Setup page: only accessible when no password set
+    if path == "/setup":
+        if is_setup_complete():
+            return RedirectResponse(url="/login")
+        return await call_next(request)
+    # If setup not complete, redirect everything else to /setup
+    if not is_setup_complete():
+        if path.startswith("/api/"):
+            return JSONResponse({"error": "Setup required", "redirect": "/setup"}, status_code=403)
+        return RedirectResponse(url="/setup")
+    # Login page: accessible without session
+    if path == "/login":
+        if verify_session(get_session_from_request(request)):
+            return RedirectResponse(url="/customizer")
+        return await call_next(request)
+    # Everything else requires auth
+    if not verify_session(get_session_from_request(request)):
+        if path.startswith("/api/"):
+            return JSONResponse({"error": "Unauthorized", "redirect": "/login"}, status_code=401)
+        return RedirectResponse(url="/login")
+    return await call_next(request)
+
+
 # === PAGE ROUTES ===
 
 @app.get("/")
@@ -810,6 +903,20 @@ async def screensaver():
 async def customizer():
     p = WEB_DIR / "customizer.html"
     if not p.exists(): return HTMLResponse("Not found", status_code=404)
+    return HTMLResponse(content=p.read_text(encoding="utf-8"), headers={"Cache-Control": "no-cache"})
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page():
+    p = WEB_DIR / "login.html"
+    if not p.exists(): return HTMLResponse("<h1>Login page not found</h1>", status_code=500)
+    return HTMLResponse(content=p.read_text(encoding="utf-8"), headers={"Cache-Control": "no-cache"})
+
+@app.get("/setup", response_class=HTMLResponse)
+async def setup_page():
+    if is_setup_complete():
+        return RedirectResponse(url="/login")
+    p = WEB_DIR / "setup.html"
+    if not p.exists(): return HTMLResponse("<h1>Setup page not found</h1>", status_code=500)
     return HTMLResponse(content=p.read_text(encoding="utf-8"), headers={"Cache-Control": "no-cache"})
 
 
@@ -1065,6 +1172,91 @@ async def api_accounts_active():
     acct = get_active_account()
     if not acct: return JSONResponse({"active": None})
     return JSONResponse({"active": acct})
+
+
+
+# === AUTH API ===
+
+@app.get("/api/auth/status")
+async def api_auth_status(request: Request):
+    """Check if setup is done and if user is authenticated."""
+    setup_done = is_setup_complete()
+    authed = verify_session(get_session_from_request(request)) if setup_done else False
+    return JSONResponse({"setup_complete": setup_done, "authenticated": authed})
+
+@app.post("/api/auth/setup")
+async def api_auth_setup(request: Request):
+    """First-time setup: set admin password. Only works if no password exists."""
+    if is_setup_complete():
+        return JSONResponse({"error": "Setup already complete"}, status_code=400)
+    try: data = await request.json()
+    except: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    password = data.get("password", "").strip()
+    if len(password) < 4:
+        return JSONResponse({"error": "Password must be at least 4 characters"}, status_code=400)
+    # Hash and store
+    pw_hash = hash_password(password)
+    set_config({"admin_password_hash": pw_hash})
+    log.info("Admin password set during first-run setup")
+    # Auto-login after setup
+    token = create_session()
+    response = JSONResponse({"ok": True, "message": "Setup complete"})
+    response.set_cookie(SESSION_COOKIE, token, max_age=SESSION_EXPIRY_DAYS*86400,
+                        httponly=True, samesite="lax")
+    return response
+
+@app.post("/api/auth/login")
+async def api_auth_login(request: Request):
+    """Authenticate with admin password."""
+    try: data = await request.json()
+    except: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    password = data.get("password", "")
+    remember = data.get("remember", False)
+    cfg = get_config("global")
+    stored_hash = cfg.get("admin_password_hash", "")
+    if not stored_hash:
+        return JSONResponse({"error": "No password configured"}, status_code=400)
+    if not verify_password(password, stored_hash):
+        log.warning(f"Failed login attempt from {request.client.host}")
+        return JSONResponse({"error": "Wrong password"}, status_code=401)
+    token = create_session()
+    max_age = SESSION_EXPIRY_DAYS * 86400 if remember else None
+    response = JSONResponse({"ok": True})
+    response.set_cookie(SESSION_COOKIE, token, max_age=max_age,
+                        httponly=True, samesite="lax")
+    log.info(f"Admin login from {request.client.host}")
+    return response
+
+@app.post("/api/auth/logout")
+async def api_auth_logout():
+    """Logout: invalidate session."""
+    invalidate_sessions()
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(SESSION_COOKIE)
+    return response
+
+@app.post("/api/auth/change-password")
+async def api_auth_change_password(request: Request):
+    """Change admin password. Requires current password."""
+    try: data = await request.json()
+    except: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    current = data.get("current_password", "")
+    new_pw = data.get("new_password", "").strip()
+    cfg = get_config("global")
+    stored_hash = cfg.get("admin_password_hash", "")
+    if not verify_password(current, stored_hash):
+        return JSONResponse({"error": "Current password is wrong"}, status_code=401)
+    if len(new_pw) < 4:
+        return JSONResponse({"error": "New password must be at least 4 characters"}, status_code=400)
+    pw_hash = hash_password(new_pw)
+    set_config({"admin_password_hash": pw_hash})
+    invalidate_sessions()
+    token = create_session()
+    response = JSONResponse({"ok": True, "message": "Password changed"})
+    response.set_cookie(SESSION_COOKIE, token, max_age=SESSION_EXPIRY_DAYS*86400,
+                        httponly=True, samesite="lax")
+    log.info("Admin password changed")
+    return response
 
 
 # === ENRICHMENT API ===

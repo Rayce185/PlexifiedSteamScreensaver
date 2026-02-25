@@ -421,7 +421,7 @@ input[type=file]{display:none}
     <div class="section-title" id="sec-steamspy" style="margin-top:28px">&#128200; SteamSpy Enrichment</div>
     <div class="enrich-panel">
       <div class="enrich-header">
-        <div><strong>Fetch global player stats from SteamSpy</strong><div class="setting-desc">Fetches owner counts, global avg playtime, review counts — needed for Shovelware detection. Requires Steam enrichment to run first. ~4 min for 1000 games.</div></div>
+        <div><strong>Fetch global player stats from SteamSpy</strong><div class="setting-desc">Fetches owner counts, global avg playtime, review counts — needed for Shovelware detection. Requires Steam enrichment to run first.</div></div>
         <div style="display:flex;gap:6px">
           <button class="btn btn-accent" id="sspy-start-btn" onclick="startSteamSpy()">&#128200; Start</button>
           <button class="btn" id="sspy-stop-btn" onclick="stopSteamSpy()" style="display:none">&#9632; Stop</button>
@@ -440,7 +440,7 @@ input[type=file]{display:none}
     <div class="section-title" id="sec-deck" style="margin-top:28px">&#127918; Deck &amp; ProtonDB Enrichment</div>
     <div class="enrich-panel">
       <div class="enrich-header">
-        <div><strong>Fetch Steam Deck compatibility + ProtonDB tiers + correct app types</strong><div class="setting-desc">Phase 1: Downloads Steam catalog for proper type classification (game/software/tool/dlc). Phase 2: Fetches Deck Verified rating + ProtonDB community tier per game. ~7 min for 1000 games. Requires Store enrichment first.</div></div>
+        <div><strong>Fetch Steam Deck compatibility + ProtonDB tiers + correct app types</strong><div class="setting-desc">Phase 1: Downloads Steam catalog for proper type classification (game/software/tool/dlc). Phase 2: Fetches Deck Verified rating + ProtonDB community tier per game. Requires Store enrichment first.</div></div>
         <div style="display:flex;gap:6px">
           <button class="btn btn-accent" id="deck-start-btn" onclick="startDeck()">&#127918; Start</button>
           <button class="btn" id="deck-stop-btn" onclick="stopDeck()" style="display:none">&#9632; Stop</button>

@@ -11,7 +11,7 @@
   body { background: #000; overflow: hidden; cursor: none; width: 100vw; height: 100vh; font-family: 'Outfit', sans-serif; user-select: none; }
   .slide { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; opacity: 0; z-index: 1; overflow: hidden; transition: opacity var(--transition) ease-in-out; }
   .slide.active { opacity: 1; z-index: 2; }
-  .slide img { position: absolute; min-width: 100%; min-height: 100%; width: auto; height: 130%; top: 50%; left: 50%; transform: translate(-50%, -50%); object-fit: cover; will-change: transform; }
+  .slide img { position: absolute; width: 100%; height: 100%; top: 0; left: 0; object-fit: cover; will-change: transform; transform-origin: center center; }
   .vignette { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: none; background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.3) 70%, rgba(0,0,0,0.65) 100%); }
   .bottom-grad { position: fixed; bottom: 0; left: 0; width: 100vw; height: 40vh; z-index: 11; pointer-events: none; background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.55) 35%, rgba(0,0,0,0.15) 70%, transparent 100%); }
   .clock { position: fixed; bottom: 44px; right: 56px; z-index: 20; text-align: right; opacity: 0; transition: opacity 1s ease; }
@@ -63,16 +63,18 @@
   function buildKB(s) {
     const st = document.getElementById('kb-style') || document.createElement('style');
     st.id = 'kb-style';
-    const z=(v)=>(1+v*s).toFixed(3), p=(v)=>(v*s).toFixed(1);
+    // s = intensity (0-1). Zoom range: 1.02 - 1.15 based on intensity.
+    // Pan uses transform-origin to shift viewport across the image.
+    const z = (v) => (1 + v * s * 0.15).toFixed(3);
     st.textContent = `
-      @keyframes kb1{from{transform:translate(-50%,-50%) scale(1) translateX(0)}to{transform:translate(-50%,-50%) scale(${z(.12)}) translateX(${p(-5)}%)}}
-      @keyframes kb2{from{transform:translate(-50%,-50%) scale(${z(.05)}) translateX(${p(-8)}%)}to{transform:translate(-50%,-50%) scale(${z(.15)}) translateX(${p(3)}%)}}
-      @keyframes kb3{from{transform:translate(-50%,-50%) scale(${z(.1)}) translateX(${p(5)}%)}to{transform:translate(-50%,-50%) scale(1) translateX(${p(-3)}%)}}
-      @keyframes kb4{from{transform:translate(-50%,-50%) scale(1) translateX(${p(-5)}%) translateY(${p(-3)}%)}to{transform:translate(-50%,-50%) scale(${z(.12)}) translateX(${p(2)}%) translateY(${p(1)}%)}}
-      @keyframes kb5{from{transform:translate(-50%,-50%) scale(${z(.15)}) translateX(${p(3)}%) translateY(${p(2)}%)}to{transform:translate(-50%,-50%) scale(${z(.02)}) translateX(${p(-4)}%) translateY(${p(-1)}%)}}
-      @keyframes kb6{from{transform:translate(-50%,-50%) scale(1) translateX(${p(-10)}%)}to{transform:translate(-50%,-50%) scale(${z(.08)}) translateX(0%)}}
-      @keyframes kb7{from{transform:translate(-50%,-50%) scale(${z(.08)}) translateX(${p(8)}%)}to{transform:translate(-50%,-50%) scale(1) translateX(${p(-2)}%)}}
-      @keyframes kb8{from{transform:translate(-50%,-50%) scale(${z(.02)}) translateX(0%) translateY(${p(3)}%)}to{transform:translate(-50%,-50%) scale(${z(.14)}) translateX(${p(-6)}%) translateY(${p(-2)}%)}}`;
+      @keyframes kb1{from{transform:scale(${z(1)});transform-origin:20% 50%}to{transform:scale(${z(1.1)});transform-origin:80% 50%}}
+      @keyframes kb2{from{transform:scale(${z(1.1)});transform-origin:80% 40%}to{transform:scale(${z(0.8)});transform-origin:20% 60%}}
+      @keyframes kb3{from{transform:scale(${z(0.9)});transform-origin:30% 30%}to{transform:scale(${z(1.15)});transform-origin:70% 70%}}
+      @keyframes kb4{from{transform:scale(${z(1.15)});transform-origin:70% 50%}to{transform:scale(${z(0.9)});transform-origin:30% 50%}}
+      @keyframes kb5{from{transform:scale(${z(1)});transform-origin:50% 30%}to{transform:scale(${z(1.1)});transform-origin:50% 70%}}
+      @keyframes kb6{from{transform:scale(${z(0.8)});transform-origin:15% 50%}to{transform:scale(${z(1.2)});transform-origin:85% 50%}}
+      @keyframes kb7{from{transform:scale(${z(1.2)});transform-origin:85% 40%}to{transform:scale(${z(0.8)});transform-origin:15% 60%}}
+      @keyframes kb8{from{transform:scale(${z(0.95)});transform-origin:40% 40%}to{transform:scale(${z(1.1)});transform-origin:60% 60%}}`;
     if(!st.parentNode) document.head.appendChild(st);
   }
 

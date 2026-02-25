@@ -1523,6 +1523,7 @@ async function pollEnrichment(){
       if(s.phase==='complete'){
         bar.style.width='100%';bar.className='progress-fill complete';
         det.style.display='flex';stopEnrichPoll();
+        if(s.started_at){const el=Math.round(Date.now()/1000-s.started_at);document.getElementById('ed-eta').textContent='Completed '+s.completed+' in '+fmtTime(el)}
         ALL=await fetch('/api/games').then(r=>r.json());
         FVALS=await fetch('/api/filter-values').then(r=>r.json());
         applyView();updateStats();buildFilterPanel();renderTypeChips();renderSSTypes();
@@ -1740,6 +1741,7 @@ async function pollCache() {
         (s.stats.sgdb > 0 ? ' (' + s.stats.sgdb + ' from SteamGridDB)' : '');
     }
     if (!s.running && cachePoll) { clearInterval(cachePoll); cachePoll = null; }
+    if (s.phase==='complete' && s.started_at) { const el=Math.round(Date.now()/1000-s.started_at); document.getElementById('cache-eta').textContent='Completed '+s.completed+' in '+fmtTime(el); }
   } catch(e) {}
 }
 

@@ -375,6 +375,7 @@ input[type=file]{display:none}
     <a href="#sec-enrichment" onclick="settingsJump(event,'sec-enrichment')">Enrichment</a>
     <a href="#sec-steamspy" onclick="settingsJump(event,'sec-steamspy')">SteamSpy</a>
     <a href="#sec-deck" onclick="settingsJump(event,'sec-deck')">Deck</a>
+    <a href="#sec-images" onclick="settingsJump(event,'sec-images')">Images</a>
     <a href="#sec-shovelware" onclick="settingsJump(event,'sec-shovelware')">Shovelware</a>
     <a href="#sec-data" onclick="settingsJump(event,'sec-data')">Data</a>
   </div>
@@ -460,6 +461,31 @@ input[type=file]{display:none}
         <div>ETA: <span id="deck-eta">-</span></div>
         <div>Skipped: <span id="deck-skipped">0</span></div>
         <div>Types corrected: <span id="deck-types">0</span></div>
+      </div>
+    </div>
+
+    <div class="section-title" id="sec-images" style="margin-top:28px">&#128247; Image Cache + SteamGridDB</div>
+    <div class="enrich-panel">
+      <div class="enrich-header">
+        <div><strong>Cache hero images locally</strong><div class="setting-desc">Downloads hero images for all games. Uses SteamGridDB (community artwork) if API key is set, otherwise Steam CDN. Cached images load faster in the screensaver.</div></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-accent" id="cache-start-btn" onclick="startCache()">&#128247; Start</button>
+          <button class="btn" id="cache-stop-btn" onclick="stopCache()" style="display:none">&#9632; Stop</button>
+        </div>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="cache-progress"></div></div>
+      <div id="cache-msg" class="enrich-status"></div>
+      <div class="enrich-details" id="cache-details" style="display:none">
+        <div>Progress: <span id="cache-prog-nums">0/0</span>&nbsp;&nbsp;Current: <span id="cache-current">-</span>&nbsp;&nbsp;ETA: <span id="cache-eta">-</span></div>
+        <div>SGDB: <span id="cache-sgdb">0</span>&nbsp;&nbsp;CDN: <span id="cache-cdn">0</span>&nbsp;&nbsp;Skipped: <span id="cache-skipped">0</span></div>
+      </div>
+      <div id="cache-stats" style="font-size:.72rem;color:var(--text-dim);margin-top:6px"></div>
+    </div>
+    <div class="setting-row" style="margin-top:12px">
+      <div><div class="setting-label">SteamGridDB API Key</div><div class="setting-desc">Free key from <a href="https://www.steamgriddb.com/profile/preferences/api" target="_blank" style="color:var(--accent)">steamgriddb.com/profile/preferences</a>. Optional — without it, Steam CDN images are cached.</div></div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="text" id="sgdb-key" placeholder="API key..." style="padding:5px 8px;font-size:.72rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);width:260px;font-family:monospace">
+        <button class="btn btn-sm btn-accent" onclick="saveSgdbKey()">Save</button>
       </div>
     </div>
 
@@ -608,7 +634,7 @@ async function init(){
     buildSortMenu(); buildFilterPanel(); renderPresets(); renderTypeChips();
     // Load default preset
     loadPresetByName('All Games');
-    applyView(); updateStats(); loadSettings(); renderDisplay(); pollEnrichment(); pollSteamSpy(); pollDeck(); renderSSTypes(); initSettingsScrollSpy();
+    applyView(); updateStats(); loadSettings(); renderDisplay(); pollEnrichment(); pollSteamSpy(); pollDeck(); pollCache(); renderSSTypes(); initSettingsScrollSpy();
   }catch(e){console.error('Init failed',e)}
 }
 
@@ -1188,7 +1214,7 @@ window.showPreview=function(appid){
   const toggleLabel=isExcl?'\u2713 Include in Screensaver':'\u2717 Exclude from Screensaver';
   const toggleClass=isExcl?'btn-green':'btn-red';
 
-  card.innerHTML='<img class="preview-hero" src="'+g.hero_2x+'" onerror="this.src=\''+g.hero_1x+'\'"><div class="preview-body"><div class="preview-name">'+esc(g.name)+'</div><div class="preview-meta">'+badges.join('')+'</div>'+(g.short_description?'<div class="preview-desc">'+esc(g.short_description)+'</div>':'')+'<dl class="preview-details">'+details+'</dl><div class="preview-actions"><button class="btn '+toggleClass+'" onclick="toggleGame('+g.appid+','+(!isExcl)+');closePreview()">'+toggleLabel+'</button><a class="btn" href="'+g.store_url+'" target="_blank">Steam Store \u2197</a><button class="btn" onclick="closePreview()">Close</button></div></div>';
+  card.innerHTML='<img class="preview-hero" src="/api/image/'+g.appid+'/hero" onerror="this.src=\''+g.hero_2x+'\'"><div class="preview-body"><div class="preview-name">'+esc(g.name)+'</div><div class="preview-meta">'+badges.join('')+'</div>'+(g.short_description?'<div class="preview-desc">'+esc(g.short_description)+'</div>':'')+'<dl class="preview-details">'+details+'</dl><div class="preview-actions"><button class="btn '+toggleClass+'" onclick="toggleGame('+g.appid+','+(!isExcl)+');closePreview()">'+toggleLabel+'</button><a class="btn" href="'+g.store_url+'" target="_blank">Steam Store \u2197</a><button class="btn" onclick="closePreview()">Close</button></div></div>';
   document.getElementById('preview-overlay').classList.add('open');
 };
 
@@ -1288,6 +1314,9 @@ function loadSettings(){
   document.getElementById('sw-en-userpt').checked=CONFIG.shovelware_enable_user_playtime!==false;
   document.getElementById('sw-en-meta').checked=CONFIG.shovelware_enable_metacritic!==false;
 }
+
+// Load SGDB key
+  if(CONFIG.sgdb_api_key) document.getElementById('sgdb-key').value = CONFIG.sgdb_api_key;
 
 window.saveSettings=async function(){
   const u={
@@ -1665,6 +1694,66 @@ window.fetch = async function(...args) {
     if (!url.includes('/api/auth/')) { window.location.href = '/login'; }
   }
   return r;
+};
+
+
+// === IMAGE CACHE ===
+let cachePoll = null;
+
+window.startCache = async function() {
+  try {
+    const r = await fetch('/api/cache/start', {method:'POST'});
+    const d = await r.json();
+    if (d.ok) { startCachePoll(); pollCache(); }
+    else toast(d.error || 'Failed');
+  } catch(e) { toast('Failed to start'); }
+};
+
+window.stopCache = async function() {
+  try {
+    await fetch('/api/cache/stop', {method:'POST'});
+  } catch(e) {}
+};
+
+function startCachePoll() { if (cachePoll) return; cachePoll = setInterval(pollCache, 2000); }
+
+async function pollCache() {
+  try {
+    const r = await fetch('/api/cache/status');
+    const s = await r.json();
+    const running = s.running || s.phase === 'complete' || s.phase === 'stopped';
+    document.getElementById('cache-start-btn').style.display = s.running ? 'none' : '';
+    document.getElementById('cache-stop-btn').style.display = s.running ? '' : 'none';
+    document.getElementById('cache-details').style.display = running ? '' : 'none';
+    const pct = s.total > 0 ? Math.round(s.completed / s.total * 100) : 0;
+    document.getElementById('cache-progress').style.width = pct + '%';
+    document.getElementById('cache-msg').textContent = s.message || '';
+    document.getElementById('cache-prog-nums').textContent = s.completed + '/' + s.total;
+    document.getElementById('cache-current').textContent = s.current_game || '-';
+    document.getElementById('cache-eta').textContent = s.eta_seconds > 0 ? fmtTime(s.eta_seconds) : '-';
+    document.getElementById('cache-sgdb').textContent = s.sgdb_hits || 0;
+    document.getElementById('cache-cdn').textContent = s.cdn_hits || 0;
+    document.getElementById('cache-skipped').textContent = s.skipped || 0;
+    if (s.stats) {
+      document.getElementById('cache-stats').textContent =
+        'Cached: ' + s.stats.cached + '/' + s.stats.total + ' games' +
+        (s.stats.sgdb > 0 ? ' (' + s.stats.sgdb + ' from SteamGridDB)' : '');
+    }
+    if (!s.running && cachePoll) { clearInterval(cachePoll); cachePoll = null; }
+  } catch(e) {}
+}
+
+window.saveSgdbKey = async function() {
+  const key = document.getElementById('sgdb-key').value.trim();
+  try {
+    const r = await fetch('/api/config', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({sgdb_api_key: key})
+    });
+    const d = await r.json();
+    if (d.ok) toast(key ? 'SteamGridDB key saved' : 'SteamGridDB key removed');
+    else toast(d.error || 'Failed');
+  } catch(e) { toast('Error saving key'); }
 };
 
 // === ACCOUNT MANAGEMENT ===

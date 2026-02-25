@@ -7,7 +7,7 @@ import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -23,6 +23,7 @@ from pss.database import (
     get_account_config, set_account_config, delete_account_config,
     get_presets, save_preset, delete_preset, get_distinct_values,
     snapshot_exclusions, get_exclusion_snapshots, restore_exclusion_snapshot,
+    get_cached_hero, upsert_image_cache, get_uncached_appids, get_image_cache_stats,
     MUTABLE_CONFIG_KEYS
 )
 
@@ -30,9 +31,11 @@ PSS_ROOT = Path(__file__).parent.parent
 DATA_DIR = PSS_ROOT / "data"
 WEB_DIR = PSS_ROOT / "web"
 LOG_DIR = PSS_ROOT / "logs"
+CACHE_DIR = DATA_DIR / "cache" / "heroes"
 DB_PATH = DATA_DIR / "pss.db"
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
 _log_ts = datetime.now().strftime("%y%m%d_%H%M%S")
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
@@ -650,6 +653,182 @@ def deck_worker():
 
 
 
+
+# === STEAMGRIDDB + IMAGE CACHE ===
+
+SGDB_API_BASE = "https://www.steamgriddb.com/api/v2"
+
+cache_state = {
+    "running": False, "stop_requested": False,
+    "total": 0, "completed": 0, "errors": 0, "skipped": 0,
+    "current_game": "", "current_appid": 0,
+    "started_at": None, "eta_seconds": 0,
+    "phase": "idle", "message": "",
+    "sgdb_hits": 0, "cdn_hits": 0
+}
+cache_lock = threading.Lock()
+cache_thread = None
+
+
+def get_sgdb_key():
+    """Get SteamGridDB API key from config."""
+    cfg = get_config("global")
+    return cfg.get("sgdb_api_key", "")
+
+
+def fetch_sgdb_heroes(appid, api_key):
+    """Fetch hero images from SteamGridDB for a Steam appid."""
+    url = f"{SGDB_API_BASE}/heroes/steam/{appid}"
+    try:
+        req = urllib.request.Request(url, headers={
+            "Authorization": f"Bearer {api_key}",
+            "User-Agent": "PSS/0.3"
+        })
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+        if not data.get("success"):
+            return []
+        heroes = data.get("data", [])
+        # Return sorted by score descending
+        return sorted(heroes, key=lambda h: h.get("score", 0), reverse=True)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return []  # No heroes for this game
+        if e.code == 429:
+            return "RATE_LIMITED"
+        return []
+    except Exception:
+        return []
+
+
+def download_image(url, local_path):
+    """Download an image URL to local path. Returns True on success."""
+    try:
+        Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+        req = urllib.request.Request(url, headers={"User-Agent": "PSS/0.3"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            data = resp.read()
+        if len(data) < 1000:  # Too small = probably error page
+            return False
+        with open(local_path, "wb") as f:
+            f.write(data)
+        return True
+    except Exception:
+        return False
+
+
+def cache_hero_for_appid(appid, name=""):
+    """Cache the best hero image for an appid. Tries SGDB first, then Steam CDN.
+    Returns: 'sgdb', 'cdn', or None."""
+    cache_dir = CACHE_DIR
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    local_path = str(cache_dir / f"{appid}.jpg")
+
+    # Already cached on disk?
+    if Path(local_path).exists():
+        return "cached"
+
+    sgdb_key = get_sgdb_key()
+
+    # Try SteamGridDB first
+    if sgdb_key:
+        heroes = fetch_sgdb_heroes(appid, sgdb_key)
+        if heroes == "RATE_LIMITED":
+            return "rate_limited"
+        if heroes:
+            # Try top 3 by score
+            for hero in heroes[:3]:
+                hero_url = hero.get("url", "")
+                if hero_url and download_image(hero_url, local_path):
+                    upsert_image_cache(appid, "sgdb", hero_url, local_path,
+                                       style=hero.get("style"), score=hero.get("score", 0),
+                                       width=hero.get("width"), height=hero.get("height"),
+                                       selected=True)
+                    return "sgdb"
+
+    # Fall back to Steam CDN
+    cdn_url = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/library_hero_2x.jpg"
+    if download_image(cdn_url, local_path):
+        upsert_image_cache(appid, "steam_cdn", cdn_url, local_path, selected=True)
+        return "cdn"
+
+    # Try 1x as last resort
+    cdn_url_1x = f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/library_hero.jpg"
+    if download_image(cdn_url_1x, local_path):
+        upsert_image_cache(appid, "steam_cdn", cdn_url_1x, local_path, selected=True)
+        return "cdn"
+
+    return None
+
+
+def image_cache_worker():
+    """Background worker: cache hero images for all games."""
+    global cache_state
+    account = get_active_account()
+    if not account:
+        with cache_lock:
+            cache_state.update(phase="error", message="No active account", running=False)
+        return
+
+    to_cache = get_uncached_appids(account["steamid64"])
+    sgdb_key = get_sgdb_key()
+
+    with cache_lock:
+        cache_state.update(total=len(to_cache), completed=0, errors=0, skipped=0,
+            sgdb_hits=0, cdn_hits=0,
+            phase="running",
+            message=f"Caching heroes for {len(to_cache)} games"
+                    + (f" (SteamGridDB {'enabled' if sgdb_key else 'disabled'})"),
+            started_at=time.time())
+    log.info(f"Image cache starting: {len(to_cache)} to process, SGDB={'yes' if sgdb_key else 'no'}")
+
+    for i, (appid, name) in enumerate(to_cache):
+        if cache_state["stop_requested"]:
+            with cache_lock:
+                cache_state.update(phase="stopped", message=f"Stopped at {i}/{len(to_cache)}", running=False)
+            return
+
+        with cache_lock:
+            cache_state["current_game"] = name
+            cache_state["current_appid"] = appid
+            cache_state["completed"] = i
+            elapsed = time.time() - cache_state["started_at"]
+            if i > 0:
+                cache_state["eta_seconds"] = int((len(to_cache) - i) * (elapsed / i))
+
+        result = cache_hero_for_appid(appid, name)
+
+        if result == "rate_limited":
+            with cache_lock:
+                cache_state.update(phase="rate_limited", message="SteamGridDB rate limited, waiting 30s...")
+            time.sleep(30)
+            result = cache_hero_for_appid(appid, name)
+            with cache_lock:
+                cache_state["phase"] = "running"
+
+        if result == "sgdb":
+            with cache_lock: cache_state["sgdb_hits"] += 1
+        elif result == "cdn":
+            with cache_lock: cache_state["cdn_hits"] += 1
+        elif result is None:
+            with cache_lock: cache_state["skipped"] += 1
+
+        # Rate limit: be gentle with SGDB
+        delay = 0.4 if sgdb_key else 0.15
+        time.sleep(delay)
+
+        if (i + 1) % 100 == 0:
+            log.info(f"Image cache checkpoint: {i+1}/{len(to_cache)} "
+                     f"(SGDB: {cache_state['sgdb_hits']}, CDN: {cache_state['cdn_hits']})")
+
+    with cache_lock:
+        cache_state.update(completed=len(to_cache), phase="complete", running=False,
+            message=f"Done! SGDB: {cache_state['sgdb_hits']}, CDN: {cache_state['cdn_hits']}, "
+                    f"skipped: {cache_state['skipped']}")
+    log.info(f"Image cache complete: SGDB={cache_state['sgdb_hits']}, "
+             f"CDN={cache_state['cdn_hits']}, skipped={cache_state['skipped']}")
+
+
 # === AUTH (Steam OpenID) ===
 SESSION_COOKIE = "pss_session"
 SESSION_EXPIRY_DAYS = 7
@@ -889,7 +1068,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
     # Always open: screensaver, static assets, auth endpoints
-    open_paths = ("/screensaver", "/api/auth/", "/favicon")
+    open_paths = ("/screensaver", "/api/auth/", "/api/image/", "/favicon")
     if any(path.startswith(p) for p in open_paths):
         return await call_next(request)
     # No accounts in DB = first run, setup page is open
@@ -1346,6 +1525,51 @@ async def api_deck_stop():
     if not deck_state["running"]: return JSONResponse({"error": "Not running"}, status_code=409)
     with deck_lock:
         deck_state.update(stop_requested=True, message="Stopping...")
+    return JSONResponse({"ok": True, "message": "Stop requested"})
+
+
+
+# === IMAGE CACHE API ===
+
+@app.get("/api/image/{appid}/hero")
+async def api_image_hero(appid: int):
+    """Serve cached hero image, or redirect to Steam CDN if not cached."""
+    local_path = CACHE_DIR / f"{appid}.jpg"
+    if local_path.exists():
+        return FileResponse(str(local_path), media_type="image/jpeg",
+                           headers={"Cache-Control": "public, max-age=86400"})
+    # Not cached — redirect to Steam CDN
+    return RedirectResponse(
+        url=f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/library_hero_2x.jpg",
+        status_code=302)
+
+@app.post("/api/cache/start")
+async def api_cache_start():
+    global cache_thread
+    if cache_state["running"]: return JSONResponse({"error": "Already running"}, status_code=409)
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    with cache_lock:
+        cache_state.update(running=True, stop_requested=False, phase="starting",
+                           message="Starting image cache...", errors=0, skipped=0,
+                           sgdb_hits=0, cdn_hits=0)
+    cache_thread = threading.Thread(target=image_cache_worker, daemon=True)
+    cache_thread.start()
+    return JSONResponse({"ok": True, "message": "Image caching started"})
+
+@app.get("/api/cache/status")
+async def api_cache_status():
+    with cache_lock:
+        state = dict(cache_state)
+    acct = get_active_account()
+    if acct:
+        state["stats"] = get_image_cache_stats(acct["steamid64"])
+    return JSONResponse(state)
+
+@app.post("/api/cache/stop")
+async def api_cache_stop():
+    if not cache_state["running"]: return JSONResponse({"error": "Not running"}, status_code=409)
+    with cache_lock:
+        cache_state.update(stop_requested=True, message="Stopping...")
     return JSONResponse({"ok": True, "message": "Stop requested"})
 
 

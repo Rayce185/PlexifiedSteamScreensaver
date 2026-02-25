@@ -75,6 +75,16 @@ CREATE INDEX IF NOT EXISTS idx_exclusions_account ON exclusions(account_id);
 CREATE INDEX IF NOT EXISTS idx_enrichment_type ON enrichment(type);
 CREATE INDEX IF NOT EXISTS idx_config_scope ON config(scope);
 CREATE INDEX IF NOT EXISTS idx_presets_account ON presets(account_id);
+
+CREATE TABLE IF NOT EXISTS image_cache (
+    appid INTEGER NOT NULL, source TEXT NOT NULL DEFAULT 'steam_cdn',
+    url TEXT NOT NULL, local_path TEXT,
+    style TEXT, score INTEGER DEFAULT 0, width INTEGER, height INTEGER,
+    selected INTEGER DEFAULT 0,
+    cached_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (appid, source, url)
+);
+CREATE INDEX IF NOT EXISTS idx_image_cache_appid ON image_cache(appid);
 CREATE TABLE IF NOT EXISTS exclusion_snapshots (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account_id TEXT NOT NULL, label TEXT NOT NULL,
@@ -94,7 +104,7 @@ MUTABLE_CONFIG_KEYS = {
     "shovelware_enable_avg_playtime", "shovelware_enable_reviews",
     "shovelware_enable_ratio", "shovelware_enable_owners",
     "shovelware_enable_user_playtime", "shovelware_enable_metacritic",
-    "auto_enrich_threshold", "auto_refresh_on_startup", "watchdog_interval"
+    "auto_enrich_threshold", "auto_refresh_on_startup", "watchdog_interval", "sgdb_api_key"
 }
 
 BUILTIN_PRESETS = [
@@ -253,6 +263,66 @@ def get_db():
         raise
     finally:
         conn.close()
+
+
+# === IMAGE CACHE ===
+
+def get_cached_hero(appid):
+    """Get the selected (or best) cached hero for an appid."""
+    with get_db() as db:
+        # First try selected
+        row = db.execute("""SELECT * FROM image_cache WHERE appid = ? AND selected = 1
+                           ORDER BY score DESC LIMIT 1""", (appid,)).fetchone()
+        if row: return dict(row)
+        # Fall back to highest-scored
+        row = db.execute("""SELECT * FROM image_cache WHERE appid = ?
+                           ORDER BY score DESC, source ASC LIMIT 1""", (appid,)).fetchone()
+        return dict(row) if row else None
+
+def get_all_cached_heroes(appid):
+    """Get all cached hero options for an appid."""
+    with get_db() as db:
+        rows = db.execute("""SELECT * FROM image_cache WHERE appid = ?
+                            ORDER BY selected DESC, score DESC""", (appid,)).fetchall()
+    return [dict(r) for r in rows]
+
+def upsert_image_cache(appid, source, url, local_path=None, style=None, score=0, width=None, height=None, selected=False):
+    with get_db() as db:
+        db.execute("""
+            INSERT INTO image_cache (appid, source, url, local_path, style, score, width, height, selected)
+            VALUES (?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(appid, source, url) DO UPDATE SET
+                local_path=COALESCE(excluded.local_path, image_cache.local_path),
+                style=excluded.style, score=excluded.score,
+                width=excluded.width, height=excluded.height,
+                cached_at=datetime('now')
+        """, (appid, source, url, local_path, style, score, width, height, int(selected)))
+
+def get_uncached_appids(account_id):
+    """Get appids that have no cached hero image."""
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT g.appid, g.name FROM games g
+            LEFT JOIN image_cache ic ON g.appid = ic.appid
+            WHERE g.account_id = ? AND ic.appid IS NULL
+            ORDER BY g.name COLLATE NOCASE
+        """, (account_id,)).fetchall()
+    return [(r["appid"], r["name"]) for r in rows]
+
+def get_image_cache_stats(account_id):
+    """Get cache statistics."""
+    with get_db() as db:
+        total = db.execute("SELECT COUNT(DISTINCT appid) as c FROM games WHERE account_id = ?",
+                          (account_id,)).fetchone()["c"]
+        cached = db.execute("""SELECT COUNT(DISTINCT g.appid) as c FROM games g
+                              INNER JOIN image_cache ic ON g.appid = ic.appid
+                              WHERE g.account_id = ?""", (account_id,)).fetchone()["c"]
+        sgdb = db.execute("""SELECT COUNT(DISTINCT g.appid) as c FROM games g
+                            INNER JOIN image_cache ic ON g.appid = ic.appid
+                            WHERE g.account_id = ? AND ic.source = 'sgdb'""",
+                         (account_id,)).fetchone()["c"]
+    return {"total": total, "cached": cached, "sgdb": sgdb}
+
 
 def get_active_account():
     with get_db() as db:

@@ -104,32 +104,45 @@ In the customizer, go to **Settings** and run enrichment in order:
 
 ## Running as a Background Service
 
-### Windows (Task Scheduler)
+PSS includes service managers for both platforms. These handle auto-start on boot,
+background execution, and clean start/stop lifecycle.
+
+### Windows
 
 ```powershell
-$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File C:\path\to\PSS\Start-PSS.ps1" -WorkingDirectory "C:\path\to\PSS"
-$trigger = New-ScheduledTaskTrigger -AtLogon
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
-Register-ScheduledTask -TaskName "PSS_Server" -Action $action -Trigger $trigger -Settings $settings -Force
+.\pss-service.ps1 install    # Register auto-start at logon (uses pythonw, no console)
+.\pss-service.ps1 start      # Start now
+.\pss-service.ps1 status     # Show PID, uptime, memory
+.\pss-service.ps1 stop       # Stop the server
+.\pss-service.ps1 restart    # Stop + start
+.\pss-service.ps1 uninstall  # Remove auto-start and stop
 ```
 
-### Linux (systemd)
+Uses Task Scheduler with `pythonw.exe` (no console window). Restarts automatically
+up to 3 times on failure with 1-minute intervals.
 
-```ini
-[Unit]
-Description=PSS Steam Screensaver
-After=network.target
+### Linux
 
-[Service]
-Type=simple
-WorkingDirectory=/path/to/PSS
-EnvironmentFile=/path/to/PSS/.env
-ExecStart=/usr/bin/python3 -m pss.server
-Restart=on-failure
-RestartSec=5
+```bash
+./pss-service.sh install    # Create systemd unit, enable on boot
+./pss-service.sh start      # Start now
+./pss-service.sh status     # Show PID, uptime, memory
+./pss-service.sh stop       # Stop the server
+./pss-service.sh restart    # Stop + start
+./pss-service.sh logs       # Follow live journal output
+./pss-service.sh uninstall  # Remove service and stop
+```
 
-[Install]
-WantedBy=multi-user.target
+Creates a hardened systemd service with `Restart=on-failure`, `NoNewPrivileges`,
+`PrivateTmp`, and `ProtectSystem=strict`.
+
+### Foreground Mode
+
+For debugging or development, use the interactive launchers:
+
+```powershell
+.\Start-PSS.ps1    # Windows — console with colored output
+./start.sh          # Linux/macOS — terminal with browser auto-open
 ```
 
 ## API Reference
@@ -219,8 +232,10 @@ PSS/
 ├── data/                    # SQLite database + image cache (gitignored)
 ├── logs/                    # Server logs with archive (gitignored)
 ├── Install-PSS.ps1          # Windows first-time setup (PowerShell)
-├── Start-PSS.ps1            # Windows server launcher (PowerShell)
+├── Start-PSS.ps1            # Windows foreground launcher (PowerShell)
 ├── Update-PSS.ps1           # Windows updater (PowerShell, preserves data/)
+├── pss-service.ps1          # Windows service manager (Task Scheduler)
+├── pss-service.sh           # Linux service manager (systemd)
 ├── install.sh               # Linux/macOS first-time setup
 ├── start.sh                 # Linux/macOS server launcher
 ├── update.sh                # Linux/macOS updater

@@ -161,8 +161,8 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .preview-actions{display:flex;gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border)}
 
 /* GAME DETAIL PANEL (Phase 5) */
-.game-panel{width:0;overflow:hidden;transition:width .25s ease;flex-shrink:0;display:flex;flex-direction:column}
-.game-panel.open{width:440px;border-left:1px solid var(--border)}
+.game-panel{width:0;overflow:hidden;transition:width .25s ease;flex-shrink:0;display:flex;flex-direction:column;position:relative}
+.game-panel.open{width:var(--gp-width,520px);border-left:1px solid var(--border)}
 .gp-header{position:relative;flex-shrink:0}
 .gp-hero{width:100%;height:220px;object-fit:cover;display:block;background:var(--bg)}
 .gp-close{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);border:none;color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
@@ -186,6 +186,15 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .gp-img-loading{text-align:center;color:var(--text-faint);font-size:.8rem;padding:20px 0}
 .gp-upload-area{display:flex;gap:8px;align-items:center;margin-top:8px}
 .gc.active{background:rgba(88,166,255,.08);border-color:rgba(88,166,255,.25)}
+.gp-resize{position:absolute;left:0;top:0;width:5px;height:100%;cursor:col-resize;z-index:5;background:transparent;transition:background .15s}
+.gp-resize:hover,.gp-resize.dragging{background:var(--accent)}
+
+/* DISPLAY TAB SPLIT */
+.display-split{display:flex;height:100%;overflow:hidden}
+.display-controls{flex:1;overflow-y:auto;padding:20px;min-width:300px}
+.display-preview{width:45%;min-width:360px;flex-shrink:0;border-left:1px solid var(--border);display:flex;flex-direction:column;background:#000}
+.display-preview-label{padding:8px 14px;font-size:.74rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;background:var(--surface);border-bottom:1px solid var(--border)}
+.display-preview iframe{flex:1;border:none;width:100%;background:#000}
 
 /* BULK BAR */
 .bulk-bar{display:none;align-items:center;justify-content:space-between;padding:8px 16px;background:rgba(88,166,255,.06);border-bottom:1px solid rgba(88,166,255,.15)}
@@ -194,7 +203,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .bulk-actions{display:flex;gap:6px}
 
 /* DISPLAY TAB */
-.display-tab{flex-direction:column;padding:20px;overflow-y:auto;max-width:900px;margin:0 auto;width:100%}
+.display-tab{flex-direction:column;overflow:hidden;width:100%;height:100%}
 .settings-nav{display:flex;gap:2px;padding:8px 16px 0;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:5;flex-wrap:wrap}
 .settings-nav a{font-size:.7rem;padding:5px 10px;color:var(--text-dim);text-decoration:none;border-radius:6px 6px 0 0;transition:all .15s;white-space:nowrap}
 .settings-nav a:hover{color:var(--text);background:rgba(255,255,255,.05)}
@@ -223,7 +232,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .toggle input:checked~.toggle-thumb{transform:translateX(16px)}
 
 /* SETTINGS TAB */
-.settings-tab{flex-direction:column;padding:20px;overflow-y:auto;max-width:900px;margin:0 auto;width:100%}
+.settings-tab{flex-direction:column;padding:20px;overflow-y:auto;width:100%}
 .setting-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(48,54,61,.5)}
 .setting-label{font-size:.85rem}
 .setting-desc{font-size:.7rem;color:var(--text-dim);margin-top:2px}
@@ -386,6 +395,7 @@ input[type=file]{display:none}
     <div class="alpha-strip" id="alpha-strip"></div>
     <!-- Game detail/image picker panel (Phase 5) -->
     <div class="game-panel" id="game-panel">
+      <div class="gp-resize" id="gp-resize"></div>
       <div class="gp-header">
         <img class="gp-hero" id="gp-hero" src="" alt="">
         <button class="gp-close" onclick="closeGamePanel()">&times;</button>
@@ -413,7 +423,15 @@ input[type=file]{display:none}
 
 <!-- DISPLAY TAB -->
 <div class="tab-content" id="tab-display">
-  <div class="display-tab" id="display-list"></div>
+  <div class="display-tab">
+    <div class="display-split">
+      <div class="display-controls" id="display-list"></div>
+      <div class="display-preview">
+        <div class="display-preview-label">&#128064; Live Preview</div>
+        <iframe id="display-preview-frame" src="/screensaver?preview=1"></iframe>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- SETTINGS TAB -->
@@ -1299,6 +1317,36 @@ window.refreshPanel = function() {
   if (_panelAppid) openGamePanel(_panelAppid);
 };
 
+// === PANEL RESIZE ===
+(function(){
+  const panel = document.getElementById('game-panel');
+  const handle = document.getElementById('gp-resize');
+  let dragging = false, startX, startW;
+  handle.addEventListener('mousedown', function(e) {
+    dragging = true; startX = e.clientX;
+    startW = panel.getBoundingClientRect().width;
+    handle.classList.add('dragging');
+    panel.style.transition = 'none';
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!dragging) return;
+    const w = Math.max(360, Math.min(900, startW - (e.clientX - startX)));
+    panel.style.setProperty('--gp-width', w + 'px');
+  });
+  document.addEventListener('mouseup', function() {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    panel.style.transition = '';
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+})();
+
+
 async function loadImageOptions(appid) {
   const grid = document.getElementById('gp-img-grid');
   const loading = document.getElementById('gp-img-loading');
@@ -1503,6 +1551,11 @@ const ELEMENTS=[
     {id:'platforms',icon:'\uD83D\uDDA5',name:'Native Platforms',desc:'Which platforms run natively',example:'Win / Linux / Mac',cat:'enriched'}
 ];
 
+function refreshDisplayPreview(){
+  const f=document.getElementById('display-preview-frame');
+  if(f && f.contentWindow) f.contentWindow.location.reload();
+}
+
 function renderDisplay(){
   const list=document.getElementById('display-list');
   const elCfg=CONFIG.display_elements||[];
@@ -1529,7 +1582,7 @@ window.toggleDE=function(id,enabled){
   const el=els.find(e=>e.id===id);
   if(el)el.enabled=enabled; else els.push({id,enabled,order:els.length});
   CONFIG.display_elements=els;
-  saveConfig({display_elements:els}); renderDisplay();
+  saveConfig({display_elements:els}); renderDisplay(); refreshDisplayPreview();
 };
 
 window.moveDE=function(id,dir){
@@ -1540,7 +1593,7 @@ window.moveDE=function(id,dir){
   if(swapIdx<0||swapIdx>=els.length)return;
   const t=els[idx].order;els[idx].order=els[swapIdx].order;els[swapIdx].order=t;
   CONFIG.display_elements=els;
-  saveConfig({display_elements:els}); renderDisplay();
+  saveConfig({display_elements:els}); renderDisplay(); refreshDisplayPreview();
 };
 
 async function saveConfig(updates){

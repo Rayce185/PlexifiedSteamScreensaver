@@ -192,7 +192,9 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 /* DISPLAY TAB SPLIT */
 .display-split{display:flex;height:100%;overflow:hidden}
 .display-controls{flex:1;overflow-y:auto;padding:20px;min-width:300px}
-.display-preview{width:45%;min-width:360px;flex-shrink:0;border-left:1px solid var(--border);display:flex;flex-direction:column;background:#000}
+.display-preview{flex:0 0 var(--dp-width,45%);min-width:300px;max-width:75%;border-left:1px solid var(--border);display:flex;flex-direction:column;background:#000;position:relative}
+.dp-resize{position:absolute;left:0;top:0;width:5px;height:100%;cursor:col-resize;z-index:5;background:transparent;transition:background .15s}
+.dp-resize:hover,.dp-resize.dragging{background:var(--accent)}
 .display-preview-label{padding:8px 14px;font-size:.74rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center}
 .dp-scene{flex:1;position:relative;overflow:hidden;background:#111}
 .dp-bg{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:.6}
@@ -488,7 +490,7 @@ input[type=file]{display:none}
   <div class="display-tab">
     <div class="display-split">
       <div class="display-controls" id="display-list"></div>
-      <div class="display-preview" id="display-preview">
+      <div class="display-preview" id="display-preview"><div class="dp-resize" id="dp-resize"></div>
         <div class="display-preview-label"><span>&#128064; Preview</span><span style="margin-left:auto;display:flex;gap:4px"><button class="btn btn-sm" onclick="prevPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9664;</button><span id="dp-game-counter" style="font-size:.68rem;line-height:24px;min-width:40px;text-align:center"></span><button class="btn btn-sm" onclick="nextPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9654;</button></span></div>
         <div class="dp-scene" id="dp-scene">
           <img class="dp-bg" id="dp-bg" src="" alt="">
@@ -1437,6 +1439,35 @@ window.refreshPanel = function() {
     document.body.style.userSelect = '';
   });
 })();
+
+// === DISPLAY PREVIEW RESIZE ===
+(function(){
+  const panel = document.getElementById('display-preview');
+  const handle = document.getElementById('dp-resize');
+  if(!panel || !handle) return;
+  let dragging = false, startX, startW;
+  handle.addEventListener('mousedown', function(e) {
+    dragging = true; startX = e.clientX;
+    startW = panel.getBoundingClientRect().width;
+    handle.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', function(e) {
+    if (!dragging) return;
+    const w = Math.max(300, Math.min(900, startW - (e.clientX - startX)));
+    panel.style.setProperty('--dp-width', w + 'px');
+  });
+  document.addEventListener('mouseup', function() {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+})();
+
 
 
 async function loadImageOptions(appid) {

@@ -2,8 +2,10 @@
 """
 PSS System Tray Application
 Cross-platform tray icon for managing the PSS server.
-Windows: .pyw extension = no console window
-Linux: requires pystray with AppIndicator3 or X11 backend
+
+Two modes:
+  Bundled (.exe): Runs uvicorn in-thread. No Python install needed.
+  Source:         Runs server as subprocess. Requires Python + deps.
 """
 
 import sys
@@ -16,12 +18,26 @@ import signal
 import platform
 from pathlib import Path
 
-# Add project root to path
-SCRIPT_DIR = Path(__file__).parent.resolve()
-os.chdir(SCRIPT_DIR)
+# ── Path Resolution ──
+# PyInstaller sets sys._MEIPASS to the temp extraction directory.
+# Bundled assets (web/, pss/) live there. User data lives next to the .exe.
+IS_BUNDLED = getattr(sys, "frozen", False)
 
-# Load .env
-env_file = SCRIPT_DIR / ".env"
+if IS_BUNDLED:
+    BUNDLE_DIR = Path(sys._MEIPASS)          # Read-only: code, web assets
+    APP_DIR = Path(sys.executable).parent     # Writable: next to .exe
+else:
+    BUNDLE_DIR = Path(__file__).parent.resolve()
+    APP_DIR = BUNDLE_DIR
+
+os.chdir(APP_DIR)
+
+# Ensure data + logs directories exist
+(APP_DIR / "data").mkdir(exist_ok=True)
+(APP_DIR / "logs").mkdir(exist_ok=True)
+
+# Load .env if present (optional — setup.html handles key entry for exe users)
+env_file = APP_DIR / ".env"
 if env_file.exists():
     for line in env_file.read_text().splitlines():
         line = line.strip()
@@ -29,10 +45,17 @@ if env_file.exists():
             k, v = line.split("=", 1)
             os.environ.setdefault(k.strip(), v.strip())
 
+# Set DATA_DIR + LOG_DIR env vars so server.py finds the right paths
+os.environ["PSS_DATA_DIR"] = str(APP_DIR / "data")
+os.environ["PSS_LOG_DIR"] = str(APP_DIR / "logs")
+if IS_BUNDLED:
+    os.environ["PSS_WEB_DIR"] = str(BUNDLE_DIR / "web")
+
 try:
     import pystray
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
 except ImportError:
+    # Shouldn't happen in bundled mode, but catch for source mode
     print("Missing dependencies. Run: pip install pystray Pillow")
     sys.exit(1)
 
@@ -40,93 +63,140 @@ except ImportError:
 # ── Icon Generation ──
 
 def create_icon(color="#4CAF50", bg="#1a1a2e"):
-    """Generate a 64x64 tray icon. Green=running, gray=stopped, yellow=starting."""
+    """Generate a 64x64 tray icon programmatically."""
     size = 64
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-
-    # Dark rounded background
     draw.rounded_rectangle([2, 2, size - 3, size - 3], radius=12, fill=bg)
-
-    # "PSS" text or a play triangle
-    # Draw a stylized play/game controller shape
-    cx, cy = size // 2, size // 2
-
-    # Main shape: rounded rect "screen"
-    draw.rounded_rectangle([12, 16, 52, 42], radius=4, fill=color, outline=None)
-
-    # "Stand" below screen
+    # Stylized monitor shape
+    draw.rounded_rectangle([12, 16, 52, 42], radius=4, fill=color)
     draw.rectangle([26, 42, 38, 48], fill=color)
     draw.rectangle([20, 48, 44, 52], fill=color)
-
     return img
 
+ICON_RUNNING  = create_icon("#4CAF50", "#1a1a2e")
+ICON_STOPPED  = create_icon("#666666", "#1a1a2e")
+ICON_STARTING = create_icon("#FFC107", "#1a1a2e")
+ICON_ERROR    = create_icon("#f44336", "#1a1a2e")
 
-ICON_RUNNING = create_icon("#4CAF50", "#1a1a2e")   # Green
-ICON_STOPPED = create_icon("#666666", "#1a1a2e")    # Gray
-ICON_STARTING = create_icon("#FFC107", "#1a1a2e")   # Yellow
-ICON_ERROR = create_icon("#f44336", "#1a1a2e")       # Red
+PORT = 8787
 
 
 # ── Server Process Management ──
 
 class PSSServer:
+    """Manages the PSS server — in-thread when bundled, subprocess when source."""
+
     def __init__(self):
-        self.process = None
-        self.lock = threading.Lock()
-        self._monitor_thread = None
+        self._lock = threading.Lock()
+        self._process = None      # subprocess mode
+        self._thread = None       # in-thread mode
+        self._uvicorn_server = None
+        self._running = False
 
     @property
     def running(self):
-        with self.lock:
-            return self.process is not None and self.process.poll() is None
+        with self._lock:
+            if IS_BUNDLED:
+                return self._running and self._thread is not None and self._thread.is_alive()
+            else:
+                return self._process is not None and self._process.poll() is None
 
     def start(self):
-        with self.lock:
-            if self.process and self.process.poll() is None:
-                return False  # Already running
+        if self.running:
+            return False
 
+        if IS_BUNDLED:
+            return self._start_inthread()
+        else:
+            return self._start_subprocess()
+
+    def _start_inthread(self):
+        """Run uvicorn in a background thread (bundled exe mode)."""
+        with self._lock:
+            self._running = True
+
+        def _run():
+            try:
+                import uvicorn
+                from pss.database import init_db
+                from pss.server import app, DB_PATH
+
+                init_db(str(DB_PATH))
+
+                config = uvicorn.Config(
+                    app, host="0.0.0.0", port=PORT,
+                    log_level="info", access_log=False
+                )
+                self._uvicorn_server = uvicorn.Server(config)
+                self._uvicorn_server.run()
+            except Exception as e:
+                print(f"Server error: {e}", file=sys.stderr)
+            finally:
+                with self._lock:
+                    self._running = False
+
+        self._thread = threading.Thread(target=_run, daemon=True)
+        self._thread.start()
+        return True
+
+    def _start_subprocess(self):
+        """Run server as subprocess (source/development mode)."""
+        with self._lock:
             python = sys.executable
             env = os.environ.copy()
 
-            # Use pythonw on Windows to avoid console flash
             if platform.system() == "Windows":
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                startupinfo.wShowWindow = 0  # SW_HIDE
-                self.process = subprocess.Popen(
+                startupinfo.wShowWindow = 0
+                self._process = subprocess.Popen(
                     [python, "-m", "pss.server"],
-                    cwd=str(SCRIPT_DIR),
-                    env=env,
+                    cwd=str(APP_DIR), env=env,
                     startupinfo=startupinfo,
                     creationflags=subprocess.CREATE_NO_WINDOW,
                 )
             else:
-                self.process = subprocess.Popen(
+                self._process = subprocess.Popen(
                     [python, "-m", "pss.server"],
-                    cwd=str(SCRIPT_DIR),
-                    env=env,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                    cwd=str(APP_DIR), env=env,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 )
             return True
 
     def stop(self):
-        with self.lock:
-            if not self.process:
+        if IS_BUNDLED:
+            self._stop_inthread()
+        else:
+            self._stop_subprocess()
+
+    def _stop_inthread(self):
+        with self._lock:
+            if self._uvicorn_server:
+                self._uvicorn_server.should_exit = True
+            self._running = False
+        # Wait for thread to finish
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=10)
+        self._thread = None
+        self._uvicorn_server = None
+
+    def _stop_subprocess(self):
+        with self._lock:
+            if not self._process:
                 return
             try:
                 if platform.system() == "Windows":
-                    self.process.terminate()
+                    self._process.terminate()
                 else:
-                    self.process.send_signal(signal.SIGTERM)
-                self.process.wait(timeout=10)
+                    self._process.send_signal(signal.SIGTERM)
+                self._process.wait(timeout=10)
             except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait(timeout=5)
+                self._process.kill()
+                self._process.wait(timeout=5)
             except Exception:
                 pass
-            self.process = None
+            self._process = None
 
     def restart(self):
         self.stop()
@@ -140,10 +210,9 @@ def get_autostart_enabled():
     system = platform.system()
     if system == "Windows":
         startup_dir = Path(os.environ.get("APPDATA", "")) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
-        return (startup_dir / "PSS.lnk").exists() or (startup_dir / "PSS Tray.lnk").exists()
+        return (startup_dir / "PSS Tray.lnk").exists()
     elif system == "Linux":
-        autostart_dir = Path.home() / ".config" / "autostart"
-        return (autostart_dir / "pss-tray.desktop").exists()
+        return (Path.home() / ".config" / "autostart" / "pss-tray.desktop").exists()
     return False
 
 
@@ -155,18 +224,23 @@ def set_autostart(enabled):
         lnk_path = startup_dir / "PSS Tray.lnk"
 
         if enabled:
+            target = sys.executable if IS_BUNDLED else str(APP_DIR / "pss_tray.pyw")
+            args = "" if IS_BUNDLED else f'"{target}"'
+            exe = sys.executable if IS_BUNDLED else sys.executable
+
+            ps_cmd = (
+                f'$ws = New-Object -ComObject WScript.Shell; '
+                f'$sc = $ws.CreateShortcut("{lnk_path}"); '
+                f'$sc.TargetPath = "{exe}"; '
+            )
+            if not IS_BUNDLED:
+                ps_cmd += f'$sc.Arguments = """{target}"""; '
+            ps_cmd += (
+                f'$sc.WorkingDirectory = "{APP_DIR}"; '
+                f'$sc.Description = "PSS System Tray"; '
+                f'$sc.Save()'
+            )
             try:
-                # Create shortcut via PowerShell (no COM dependency)
-                pyw_path = SCRIPT_DIR / "pss_tray.pyw"
-                ps_cmd = (
-                    f'$ws = New-Object -ComObject WScript.Shell; '
-                    f'$sc = $ws.CreateShortcut("{lnk_path}"); '
-                    f'$sc.TargetPath = "{sys.executable}"; '
-                    f'$sc.Arguments = """{pyw_path}"""; '
-                    f'$sc.WorkingDirectory = "{SCRIPT_DIR}"; '
-                    f'$sc.Description = "PSS System Tray"; '
-                    f'$sc.Save()'
-                )
                 subprocess.run(["powershell", "-Command", ps_cmd],
                              capture_output=True, creationflags=subprocess.CREATE_NO_WINDOW)
             except Exception:
@@ -183,14 +257,14 @@ def set_autostart(enabled):
 
         if enabled:
             autostart_dir.mkdir(parents=True, exist_ok=True)
-            python = sys.executable
+            exe = sys.executable
             desktop_file.write_text(
                 f"[Desktop Entry]\n"
                 f"Type=Application\n"
                 f"Name=PSS Tray\n"
                 f"Comment=Plexified Steam Screensaver\n"
-                f"Exec={python} {SCRIPT_DIR / 'pss_tray.pyw'}\n"
-                f"Path={SCRIPT_DIR}\n"
+                f"Exec={exe}" + ("" if IS_BUNDLED else f" {APP_DIR / 'pss_tray.pyw'}") + "\n"
+                f"Path={APP_DIR}\n"
                 f"Terminal=false\n"
                 f"X-GNOME-Autostart-enabled=true\n"
                 f"StartupNotify=false\n"
@@ -200,6 +274,41 @@ def set_autostart(enabled):
                 desktop_file.unlink()
 
 
+# ── Update Checker ──
+
+def check_for_updates():
+    """Check GitHub releases for a newer version. Returns (has_update, latest_tag, download_url) or None."""
+    try:
+        import urllib.request
+        import json
+        url = "https://api.github.com/repos/Rayce185/PlexifiedSteamScreensaver/releases/latest"
+        req = urllib.request.Request(url, headers={"User-Agent": "PSS"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+
+        latest_tag = data.get("tag_name", "")
+        current = ""
+        version_file = APP_DIR / "VERSION"
+        if version_file.exists():
+            current = version_file.read_text().strip()
+
+        if latest_tag and latest_tag.lstrip("v") != current.lstrip("v"):
+            # Find the right asset
+            dl_url = data.get("html_url", "")
+            for asset in data.get("assets", []):
+                name = asset.get("name", "").lower()
+                if platform.system() == "Windows" and name.endswith(".exe"):
+                    dl_url = asset["browser_download_url"]
+                    break
+                elif platform.system() == "Linux" and ("linux" in name or name.endswith(".AppImage")):
+                    dl_url = asset["browser_download_url"]
+                    break
+            return (True, latest_tag, dl_url)
+        return (False, latest_tag, "")
+    except Exception:
+        return None
+
+
 # ── Tray Application ──
 
 class PSSTray:
@@ -207,6 +316,7 @@ class PSSTray:
         self.server = PSSServer()
         self.icon = None
         self._autostart = get_autostart_enabled()
+        self._update_info = None  # (has_update, tag, url)
 
     def _update_icon(self):
         if not self.icon:
@@ -219,21 +329,28 @@ class PSSTray:
             self.icon.title = "PSS — Stopped"
 
     def _monitor_loop(self):
-        """Background thread: update icon state every 3 seconds."""
+        """Background thread: update icon + periodic update check."""
+        check_counter = 0
         while self.icon and self.icon.visible:
             self._update_icon()
-            # Rebuild menu to reflect current state
             try:
                 self.icon.update_menu()
             except Exception:
                 pass
+
+            # Check for updates every ~30 minutes
+            check_counter += 1
+            if check_counter >= 600:  # 600 * 3s = 30 min
+                check_counter = 0
+                self._update_info = check_for_updates()
+
             time.sleep(3)
 
     def on_open_customizer(self, icon, item):
-        webbrowser.open("http://localhost:8787/customizer")
+        webbrowser.open(f"http://localhost:{PORT}/customizer")
 
     def on_open_screensaver(self, icon, item):
-        webbrowser.open("http://localhost:8787/screensaver")
+        webbrowser.open(f"http://localhost:{PORT}/screensaver")
 
     def on_start(self, icon, item):
         if self.server.running:
@@ -271,6 +388,19 @@ class PSSTray:
         self._autostart = not self._autostart
         set_autostart(self._autostart)
 
+    def on_check_updates(self, icon, item):
+        threading.Thread(target=self._do_check_updates, daemon=True).start()
+
+    def _do_check_updates(self):
+        self._update_info = check_for_updates()
+        if self._update_info is None:
+            return
+        has_update, tag, url = self._update_info
+        if has_update and url:
+            webbrowser.open(url)
+        elif has_update:
+            webbrowser.open("https://github.com/Rayce185/PlexifiedSteamScreensaver/releases/latest")
+
     def on_quit(self, icon, item):
         self.server.stop()
         icon.stop()
@@ -284,6 +414,11 @@ class PSSTray:
     def _autostart_checked(self, item):
         return self._autostart
 
+    def _update_label(self, item):
+        if self._update_info and self._update_info[0]:
+            return f"Update Available ({self._update_info[1]})"
+        return "Check for Updates"
+
     def build_menu(self):
         return pystray.Menu(
             pystray.MenuItem("Open Customizer", self.on_open_customizer, default=True),
@@ -294,6 +429,7 @@ class PSSTray:
             pystray.MenuItem("Restart Server", self.on_restart, visible=self._is_running),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Start with OS", self.on_autostart, checked=self._autostart_checked),
+            pystray.MenuItem(self._update_label, self.on_check_updates),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit", self.on_quit),
         )
@@ -311,17 +447,23 @@ class PSSTray:
             self.icon.title = "PSS — Starting..."
             threading.Thread(target=self._do_start, daemon=True).start()
 
-        # Start monitor thread
+            # Open browser after server starts
+            def _open_browser():
+                time.sleep(4)
+                webbrowser.open(f"http://localhost:{PORT}/customizer")
+            threading.Thread(target=_open_browser, daemon=True).start()
+
+        # Initial update check
+        threading.Thread(target=lambda: setattr(self, '_update_info', check_for_updates()), daemon=True).start()
+
+        # Monitor thread
         threading.Thread(target=self._monitor_loop, daemon=True).start()
 
-        # This blocks until quit
         self.icon.run()
 
 
 def main():
-    # Parse args
     no_server = "--no-server" in sys.argv
-
     tray = PSSTray()
     tray.run(autostart_server=not no_server)
 

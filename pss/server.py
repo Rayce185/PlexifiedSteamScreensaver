@@ -29,9 +29,9 @@ from pss.database import (
 )
 
 PSS_ROOT = Path(__file__).parent.parent
-DATA_DIR = PSS_ROOT / "data"
-WEB_DIR = PSS_ROOT / "web"
-LOG_DIR = PSS_ROOT / "logs"
+DATA_DIR = Path(os.environ["PSS_DATA_DIR"]) if "PSS_DATA_DIR" in os.environ else PSS_ROOT / "data"
+WEB_DIR = Path(os.environ["PSS_WEB_DIR"]) if "PSS_WEB_DIR" in os.environ else PSS_ROOT / "web"
+LOG_DIR = Path(os.environ["PSS_LOG_DIR"]) if "PSS_LOG_DIR" in os.environ else PSS_ROOT / "logs"
 CACHE_DIR = DATA_DIR / "cache" / "heroes"
 DB_PATH = DATA_DIR / "pss.db"
 
@@ -104,6 +104,12 @@ class WSManager:
             self.disconnect(ws)
 
 ws_mgr = WSManager()
+
+import asyncio as _aio
+@app.on_event("startup")
+async def _ws_loop_ref():
+    ws_mgr._loop = _aio.get_running_loop()
+
 
 STEAM_API_KEY = os.environ.get("STEAM_API_KEY", "")
 
@@ -2237,11 +2243,6 @@ async def websocket_endpoint(ws: WebSocket):
 
 def main():
     init_db(str(DB_PATH))
-    # Store event loop for WS broadcasts from threads
-    import asyncio as _aio
-    @app.on_event("startup")
-    async def _ws_loop_ref():
-        ws_mgr._loop = _aio.get_running_loop()
     config = get_config("global")
     # Apply saved log level
     saved_level = config.get("log_level", "INFO")

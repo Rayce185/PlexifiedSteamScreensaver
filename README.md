@@ -6,53 +6,56 @@ A cinematic Ken Burns slideshow screensaver for your Steam game library, with a 
 
 ---
 
-## Quick Start (2 minutes)
+## Quick Start
 
-### Windows
+### Windows — Download and Double-Click
 
-1. **Download** → [Click here to download ZIP](https://github.com/Rayce185/PlexifiedSteamScreensaver/archive/refs/heads/main.zip)
-2. **Extract** the ZIP anywhere (e.g. Desktop, Documents)
-3. **Double-click `PSS.bat`**
+1. Go to [**Releases**](https://github.com/Rayce185/PlexifiedSteamScreensaver/releases/latest)
+2. Download `PSS-Windows-vX.X.X.zip`
+3. Extract the ZIP anywhere (Desktop, Documents, wherever)
+4. Double-click **`PSS.exe`**
 
-That's it. The launcher handles everything:
-- Checks if Python is installed (opens download page if not)
-- Installs dependencies automatically
-- Walks you through Steam API key setup on first run
-- Starts PSS with a system tray icon
+That's it. No Python. No command line. No installs.
 
-> **Don't have Python?** The launcher will open the download page for you.
-> Just install it with **"Add Python to PATH" checked**, then double-click `PSS.bat` again.
+- A **system tray icon** appears in your taskbar (bottom-right, near the clock)
+- Your browser opens to the setup page
+- Enter your **Steam Web API Key** when prompted ([get one here](https://steamcommunity.com/dev/apikey))
+- Done — PSS is running
 
-### Linux / macOS
+### Linux / macOS — Script Launcher
 
 ```bash
 # Download and extract
-wget https://github.com/Rayce185/PlexifiedSteamScreensaver/archive/refs/heads/main.zip
-unzip main.zip && cd PlexifiedSteamScreensaver-main
+wget https://github.com/Rayce185/PlexifiedSteamScreensaver/releases/latest/download/PSS-Source-vX.X.X.zip
+unzip PSS-Source-*.zip && cd PSS-Source
 
-# Run (handles deps + setup automatically)
+# Run (auto-installs dependencies, guides you through setup)
 bash pss.sh
 ```
 
+> Requires Python 3.11+ (`sudo apt install python3 python3-pip` on Ubuntu/Debian)
+
 ### After Launch
 
-- A **system tray icon** appears (bottom-right on Windows, panel on Linux)
-- **Right-click** it for Start/Stop/Restart/Quit
-- **Double-click** it to open the Customizer
-- Your browser opens automatically to the Customizer UI
+| Action | What happens |
+|--------|-------------|
+| **Double-click tray icon** | Opens the Customizer UI in your browser |
+| **Right-click tray icon** | Start / Stop / Restart / Auto-start with OS / Check for Updates / Quit |
+| First run | Browser opens setup page → enter Steam API key → library loads automatically |
 
 ---
 
 ## What You Need
 
-| Requirement | Why | How to Get It |
-|-------------|-----|---------------|
-| **Python 3.11+** | PSS runs on Python | [python.org/downloads](https://www.python.org/downloads/) — check "Add to PATH" |
-| **Steam** | Your game library | Already installed if you game on PC |
-| **Steam Web API Key** | Access your library data | [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey) — log in, enter "localhost", copy key |
-| **SteamGridDB API Key** *(optional)* | Better hero images | [steamgriddb.com/profile/preferences/api](https://www.steamgriddb.com/profile/preferences/api) |
+| Requirement | Windows .exe | Linux/macOS |
+|-------------|:---:|:---:|
+| **Python 3.11+** | Bundled ✓ | Install separately |
+| **Steam** | Installed on PC | Installed on PC |
+| **Steam Web API Key** | Prompted on first run | Prompted on first run |
+| **SteamGridDB Key** *(optional)* | Enter in Settings UI | Enter in Settings UI |
 
-> **Everything except Python is handled by the launcher.** You'll be prompted for your API key on first run.
+> **Steam Web API Key**: [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey) — log in, enter "localhost" as domain, copy the key.
+> **SteamGridDB Key** *(optional, for better images)*: [steamgriddb.com/profile/preferences/api](https://www.steamgriddb.com/profile/preferences/api)
 
 ---
 
@@ -96,18 +99,18 @@ bash pss.sh
 
 ## Updating
 
-### Windows
-Double-click `PSS.bat` — if you downloaded a new ZIP, it just works. Your `data/` folder (database, images) is preserved.
+### Windows (.exe)
+Right-click the tray icon → **Check for Updates**. If a new version is available, it opens the download page. Download the new ZIP, extract over the old folder — your `data/` directory is preserved.
 
-Or use the dedicated updater:
-```powershell
-# Right-click → Run with PowerShell
-.\Update-PSS.ps1
+### Linux / macOS (source)
+```bash
+./update.sh    # backs up data, downloads latest, restores data
 ```
 
-### Linux / macOS
+### From Source (git)
 ```bash
-./update.sh
+git pull origin main
+pip install -r requirements.txt
 ```
 
 ---
@@ -140,7 +143,7 @@ In the customizer, go to **Settings** and run enrichment in order:
 PSS includes a system tray application that sits in your taskbar (Windows) or panel (Linux).
 Double-click the tray icon to open the Customizer. Right-click for the full menu.
 
-### Quick Start
+### Running from Source
 
 ```bash
 # Windows (no console window — .pyw extension)
@@ -156,6 +159,7 @@ python3 pss_tray.pyw
 - **Open Screensaver** — opens the fullscreen screensaver
 - **Start / Stop / Restart Server** — manage the server process
 - **Start with OS** — toggle auto-launch at login (Windows: Startup folder shortcut, Linux: XDG autostart)
+- **Check for Updates** — checks GitHub for new releases, opens download page if available
 - **Quit** — stops the server and exits the tray
 
 ### Icon States
@@ -305,22 +309,23 @@ PSS/
 │   └── setup.html           # First-run account detection
 ├── data/                    # SQLite database + image cache (gitignored)
 ├── logs/                    # Server logs with archive (gitignored)
-├── PSS.bat                  # ⭐ Windows — double-click to run
-├── pss.sh                   # ⭐ Linux/macOS — bash pss.sh to run
-├── pss_tray.pyw             # System tray app (both platforms)
+├── pss_tray.pyw             # ⭐ Main app: system tray + server management
+├── pss.spec                 # PyInstaller spec → builds PSS.exe
+├── .github/workflows/       # GitHub Actions: auto-build .exe on release
+├── PSS.bat                  # Windows source launcher (fallback if no .exe)
+├── pss.sh                   # Linux/macOS source launcher
 ├── Install-PSS.ps1          # Windows manual setup (PowerShell)
-├── Start-PSS.ps1            # Windows foreground launcher (PowerShell)
-├── Update-PSS.ps1           # Windows updater (PowerShell, preserves data/)
-├── pss-service.ps1          # Windows background service (Task Scheduler)
+├── Start-PSS.ps1            # Windows foreground/debug launcher
+├── Update-PSS.ps1           # Windows source updater
+├── pss-service.ps1          # Windows headless service (Task Scheduler)
 ├── install.sh               # Linux/macOS manual setup
-├── start.sh                 # Linux/macOS foreground launcher
-├── update.sh                # Linux/macOS updater
-├── pss-service.sh           # Linux background service (systemd)
+├── start.sh                 # Linux/macOS foreground/debug launcher
+├── update.sh                # Linux/macOS source updater
+├── pss-service.sh           # Linux headless service (systemd)
 ├── migrate_v2.py            # One-time JSON → SQLite migration (v2 users)
-├── pss.spec                 # PyInstaller build spec
 ├── requirements.txt
 ├── .env.example
-├── VERSION                  # Current commit hash
+├── VERSION                  # Version tag or commit hash
 └── .gitignore
 ```
 

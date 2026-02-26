@@ -1,0 +1,81 @@
+name: Build & Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Write version
+        run: echo "${{ github.ref_name }}" > VERSION
+
+      - name: Build exe
+        run: pyinstaller pss.spec
+
+      - name: Create ZIP
+        run: Compress-Archive -Path dist/PSS/* -DestinationPath PSS-Windows-${{ github.ref_name }}.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PSS-Windows
+          path: PSS-Windows-${{ github.ref_name }}.zip
+
+  release:
+    needs: [build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write version
+        run: echo "${{ github.ref_name }}" > VERSION
+
+      - name: Create source ZIP (Linux/macOS)
+        run: |
+          mkdir -p PSS-Source
+          cp -r pss web *.py *.pyw *.sh *.ps1 *.bat *.spec requirements.txt .env.example VERSION README.md PSS-Source/
+          cd PSS-Source && chmod +x *.sh pss_tray.pyw && cd ..
+          zip -r PSS-Source-${{ github.ref_name }}.zip PSS-Source/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: PSS-Windows
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            PSS-Windows-${{ github.ref_name }}.zip
+            PSS-Source-${{ github.ref_name }}.zip
+          generate_release_notes: true
+          body: |
+            ## Download
+
+            | Platform | File | Instructions |
+            |----------|------|-------------|
+            | **Windows** | `PSS-Windows-${{ github.ref_name }}.zip` | Extract → Double-click `PSS.exe` |
+            | **Linux / macOS** | `PSS-Source-${{ github.ref_name }}.zip` | Extract → `bash pss.sh` (requires Python 3.11+) |
+
+            ### First Time?
+            1. Download and extract the ZIP for your platform
+            2. Run it — you'll be guided through Steam API key setup
+            3. A system tray icon appears — right-click for options
+
+            See [README](https://github.com/Rayce185/PlexifiedSteamScreensaver#readme) for full docs.

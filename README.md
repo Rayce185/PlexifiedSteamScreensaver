@@ -102,7 +102,44 @@ In the customizer, go to **Settings** and run enrichment in order:
 - **Windows**: Run `Update-PSS.ps1` (preserves `data/` directory)
 - **Linux/macOS**: Run `./update.sh`
 
-## Running as a Background Service
+## System Tray
+
+PSS includes a system tray application that sits in your taskbar (Windows) or panel (Linux).
+Double-click the tray icon to open the Customizer. Right-click for the full menu.
+
+### Quick Start
+
+```bash
+# Windows (no console window — .pyw extension)
+pythonw pss_tray.pyw
+
+# Linux
+python3 pss_tray.pyw
+```
+
+### Tray Menu
+
+- **Open Customizer** (double-click) — opens `http://localhost:8787/customizer`
+- **Open Screensaver** — opens the fullscreen screensaver
+- **Start / Stop / Restart Server** — manage the server process
+- **Start with OS** — toggle auto-launch at login (Windows: Startup folder shortcut, Linux: XDG autostart)
+- **Quit** — stops the server and exits the tray
+
+### Icon States
+
+| Icon Color | Meaning |
+|------------|---------|
+| Green | Server running |
+| Yellow | Starting / Restarting |
+| Gray | Stopped |
+
+Launch with `--no-server` to start the tray without auto-starting the server:
+
+```bash
+pythonw pss_tray.pyw --no-server
+```
+
+## Running as a Background Service (Headless)
 
 PSS includes service managers for both platforms. These handle auto-start on boot,
 background execution, and clean start/stop lifecycle.
@@ -236,6 +273,7 @@ PSS/
 ├── Update-PSS.ps1           # Windows updater (PowerShell, preserves data/)
 ├── pss-service.ps1          # Windows service manager (Task Scheduler)
 ├── pss-service.sh           # Linux service manager (systemd)
+├── pss_tray.pyw             # System tray app (Windows + Linux)
 ├── install.sh               # Linux/macOS first-time setup
 ├── start.sh                 # Linux/macOS server launcher
 ├── update.sh                # Linux/macOS updater

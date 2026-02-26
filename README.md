@@ -47,12 +47,12 @@ A cinematic Ken Burns slideshow screensaver for your Steam game library, with a 
 
 ## Quick Start
 
-### Windows
+### Windows (PowerShell)
 
-```
-1. Double-click INSTALL.bat
+```powershell
+1. Right-click Install-PSS.ps1 → "Run with PowerShell"
 2. Enter your Steam API Key when prompted
-3. Double-click START.bat
+3. Right-click Start-PSS.ps1 → "Run with PowerShell"
 ```
 
 ### Linux / macOS
@@ -99,7 +99,7 @@ In the customizer, go to **Settings** and run enrichment in order:
 
 ## Updating
 
-- **Windows**: Run `UPDATE.bat` (preserves `data/` directory)
+- **Windows**: Run `Update-PSS.ps1` (preserves `data/` directory)
 - **Linux/macOS**: Run `./update.sh`
 
 ## Running as a Background Service
@@ -107,7 +107,7 @@ In the customizer, go to **Settings** and run enrichment in order:
 ### Windows (Task Scheduler)
 
 ```powershell
-$action = New-ScheduledTaskAction -Execute "pythonw.exe" -Argument "C:\path\to\PSS\pss_start.pyw" -WorkingDirectory "C:\path\to\PSS"
+$action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File C:\path\to\PSS\Start-PSS.ps1" -WorkingDirectory "C:\path\to\PSS"
 $trigger = New-ScheduledTaskTrigger -AtLogon
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
 Register-ScheduledTask -TaskName "PSS_Server" -Action $action -Trigger $trigger -Settings $settings -Force
@@ -218,9 +218,9 @@ PSS/
 │   └── setup.html           # First-run account detection
 ├── data/                    # SQLite database + image cache (gitignored)
 ├── logs/                    # Server logs with archive (gitignored)
-├── INSTALL.bat              # Windows first-time setup
-├── START.bat                # Windows server launcher
-├── UPDATE.bat               # Windows updater (preserves data/)
+├── Install-PSS.ps1          # Windows first-time setup (PowerShell)
+├── Start-PSS.ps1            # Windows server launcher (PowerShell)
+├── Update-PSS.ps1           # Windows updater (PowerShell, preserves data/)
 ├── install.sh               # Linux/macOS first-time setup
 ├── start.sh                 # Linux/macOS server launcher
 ├── update.sh                # Linux/macOS updater

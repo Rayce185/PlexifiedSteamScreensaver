@@ -522,6 +522,7 @@ input[type=file]{display:none}
     <a href="#sec-deck" onclick="settingsJump(event,'sec-deck')">Deck</a>
     <a href="#sec-images" onclick="settingsJump(event,'sec-images')">Images</a>
     <a href="#sec-shovelware" onclick="settingsJump(event,'sec-shovelware')">Shovelware</a>
+    <a href="#sec-logs" onclick="settingsJump(event,'sec-logs')">Logs</a>
     <a href="#sec-data" onclick="settingsJump(event,'sec-data')">Data</a>
   </div>
   <div class="settings-tab">
@@ -668,6 +669,23 @@ input[type=file]{display:none}
     <div class="setting-row"><div><div class="setting-label">No Metacritic score</div><div class="setting-desc">Flag if the game has no Metacritic rating (light signal)</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-en-meta"><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div></div>
     <div class="setting-row"><div><div class="setting-label">Only flag unplayed games</div><div class="setting-desc">If on, games you've played are never flagged regardless of other signals</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-unplayed"><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div></div>
     <div style="margin-top:8px"><button class="btn btn-accent" onclick="saveShovelwareSettings()">Save Shovelware Settings</button></div>
+
+    <div class="section-title" id="sec-logs" style="margin-top:28px">&#128220; Server Logs</div>
+    <div class="setting-row"><div><div class="setting-label">Log Level</div><div class="setting-desc">Controls verbosity. DEBUG shows everything, ERROR shows only errors. Changes apply immediately.</div></div><div class="setting-input" style="display:flex;gap:4px"><button class="btn btn-sm log-lvl-btn" onclick="setLogLevel('DEBUG')">DEBUG</button><button class="btn btn-sm log-lvl-btn" onclick="setLogLevel('INFO')">INFO</button><button class="btn btn-sm log-lvl-btn" onclick="setLogLevel('WARNING')">WARN</button><button class="btn btn-sm log-lvl-btn" onclick="setLogLevel('ERROR')">ERROR</button></div></div>
+    <div class="enrich-panel" style="margin-top:8px">
+      <div class="enrich-header">
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <select id="log-file-sel" onchange="loadLogs()" style="font-size:.75rem;padding:3px 6px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px"></select>
+          <select id="log-level-filter" onchange="loadLogs()" style="font-size:.75rem;padding:3px 6px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
+            <option value="">All Levels</option><option value="DEBUG">DEBUG</option><option value="INFO">INFO</option><option value="WARNING">WARNING</option><option value="ERROR">ERROR</option>
+          </select>
+          <input id="log-search" type="text" placeholder="Search..." oninput="debouncedLoadLogs()" style="font-size:.75rem;padding:3px 6px;width:140px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
+          <button class="btn btn-sm" onclick="loadLogs()">&#8635;</button>
+        </div>
+        <div id="log-stats" style="font-size:.68rem;color:var(--text-faint)"></div>
+      </div>
+      <pre id="log-output" style="margin:8px 0 0;padding:10px;background:#0d1117;color:#c9d1d9;border-radius:6px;font-size:.68rem;line-height:1.5;max-height:420px;overflow:auto;white-space:pre-wrap;word-break:break-all"></pre>
+    </div>
 
     <div class="section-title" id="sec-data" style="margin-top:28px">&#128190; Data Management</div>
     <div class="setting-row"><div><div class="setting-label">Auto-enrich on first startup</div><div class="setting-desc">If library size is at or below this threshold, Store + SteamSpy enrichment runs automatically on first launch. Set to 0 to disable.</div></div><div class="setting-input"><input type="number" id="cfg-auto-enrich" min="0" max="2000" step="50"><span class="setting-unit">games</span></div></div>
@@ -2199,6 +2217,7 @@ function loadSettings(){
   const im=CONFIG.image_mode||'selected';
   document.getElementById('imgmode-selected').classList.toggle('active',im==='selected');
   document.getElementById('imgmode-shuffle').classList.toggle('active',im==='shuffle');
+  initLogLevel();
 
 window.saveSettings=async function(){
   const u={
@@ -2351,7 +2370,7 @@ function initSettingsScrollSpy(){
   const tab=document.getElementById('tab-settings');
   const nav=document.getElementById('settings-nav');
   if(!tab||!nav) return;
-  const secs=['sec-timing','sec-animation','sec-sstypes','sec-enrichment','sec-steamspy','sec-deck','sec-shovelware','sec-data'];
+  const secs=['sec-timing','sec-animation','sec-sstypes','sec-enrichment','sec-steamspy','sec-deck','sec-shovelware','sec-logs','sec-data'];
   tab.addEventListener('scroll',function(){
     let active='sec-timing';
     for(const id of secs){
@@ -2626,6 +2645,53 @@ async function pollCache() {
     if (!s.running && cachePoll) { clearInterval(cachePoll); cachePoll = null; }
     if (s.phase==='complete' && s.started_at) { const el=Math.round(Date.now()/1000-s.started_at); document.getElementById('cache-eta').textContent='Completed '+s.completed+' in '+fmtTime(el); }
   } catch(e) {}
+}
+
+
+// === LOG VIEWER ===
+let _logDebounce = null;
+function debouncedLoadLogs() { clearTimeout(_logDebounce); _logDebounce = setTimeout(loadLogs, 400); }
+
+window.loadLogs = async function() {
+  const file = document.getElementById('log-file-sel').value || '';
+  const level = document.getElementById('log-level-filter').value || '';
+  const search = document.getElementById('log-search').value || '';
+  const params = new URLSearchParams({lines:'500'});
+  if(file) params.set('file', file);
+  if(level) params.set('level', level);
+  if(search) params.set('search', search);
+  try {
+    const resp = await fetch('/api/logs?' + params);
+    const d = await resp.json();
+    const out = document.getElementById('log-output');
+    out.textContent = d.lines.length ? d.lines.join('\n') : '(no log lines matching filters)';
+    out.scrollTop = out.scrollHeight;
+    document.getElementById('log-stats').textContent = d.filtered + ' of ' + d.total + ' lines';
+    // Populate file selector if empty
+    const sel = document.getElementById('log-file-sel');
+    if(sel.options.length <= 1) {
+      sel.innerHTML = '';
+      (d.available||[]).forEach(f => { const o=document.createElement('option'); o.value=f; o.textContent=f; sel.appendChild(o); });
+      if(d.archive && d.archive.length) {
+        const grp = document.createElement('optgroup'); grp.label = 'Archive';
+        d.archive.forEach(f => { const o=document.createElement('option'); o.value='archive/'+f; o.textContent=f; grp.appendChild(o); });
+        sel.appendChild(grp);
+      }
+    }
+  } catch(e) { document.getElementById('log-output').textContent = 'Failed to load logs'; }
+};
+
+window.setLogLevel = async function(level) {
+  try {
+    await fetch('/api/logs/level', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({level})});
+    document.querySelectorAll('.log-lvl-btn').forEach(b => b.classList.toggle('active', b.textContent === level));
+    toast('Log level: ' + level);
+  } catch(e) { toast('Failed to set log level'); }
+};
+
+function initLogLevel() {
+  const lvl = (CONFIG.log_level || 'INFO').toUpperCase();
+  document.querySelectorAll('.log-lvl-btn').forEach(b => b.classList.toggle('active', b.textContent === lvl || (b.textContent === 'WARN' && lvl === 'WARNING')));
 }
 
 // === SHUFFLE CACHE ===

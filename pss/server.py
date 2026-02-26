@@ -59,6 +59,14 @@ logging.basicConfig(
 log = logging.getLogger("pss")
 log.info(f"PSS version: {_version}")
 
+def set_log_level(level_str="INFO"):
+    """Set log level dynamically from config."""
+    lvl = getattr(logging, level_str.upper(), logging.INFO)
+    log.setLevel(lvl)
+    for h in logging.root.handlers:
+        h.setLevel(lvl)
+    log.info(f"Log level set to {level_str.upper()}")
+
 STEAM_API_KEY = os.environ.get("STEAM_API_KEY", "")
 STEAM_PATH = os.environ.get("STEAM_PATH", r"C:\Program Files (x86)\Steam")
 
@@ -1975,6 +1983,65 @@ async def api_shuffle_stop():
     return JSONResponse({"ok": True})
 
 
+
+# === LOG VIEWER API ===
+_LOG_FILE = LOG_DIR / f"pss_{_log_ts}_{_version}.log"
+
+@app.get("/api/logs")
+async def api_logs(request: Request):
+    """Return log lines. ?lines=N (default 200), ?level=ERROR, ?search=text, ?file=filename"""
+    params = request.query_params
+    n = min(int(params.get("lines", "200")), 5000)
+    level_filter = params.get("level", "").upper()
+    search = params.get("search", "").lower()
+    filename = params.get("file", "")
+
+    target = LOG_DIR / filename if filename else _LOG_FILE
+    if not target.exists() or not str(target.resolve()).startswith(str(LOG_DIR.resolve())):
+        return JSONResponse({"lines": [], "file": "", "available": []})
+
+    with open(target, "r", errors="replace") as f:
+        all_lines = f.readlines()
+
+    # Filter
+    filtered = all_lines
+    if level_filter:
+        filtered = [l for l in filtered if f"[{level_filter}]" in l]
+    if search:
+        filtered = [l for l in filtered if search in l.lower()]
+
+    # Tail
+    result = filtered[-n:]
+
+    # List available log files
+    available = sorted([f.name for f in LOG_DIR.glob("pss*.log")], reverse=True)
+    archive = sorted([f.name for f in (LOG_DIR / "archive").glob("pss*.log")], reverse=True) if (LOG_DIR / "archive").exists() else []
+
+    return JSONResponse({
+        "lines": [l.rstrip() for l in result],
+        "total": len(all_lines),
+        "filtered": len(filtered),
+        "file": target.name,
+        "available": available,
+        "archive": archive
+    })
+
+
+@app.post("/api/logs/level")
+async def api_set_log_level(request: Request):
+    """Change log level at runtime. Body: {"level": "DEBUG|INFO|WARNING|ERROR"}"""
+    try:
+        data = await request.json()
+        level = data.get("level", "INFO").upper()
+        if level not in ("DEBUG", "INFO", "WARNING", "ERROR"):
+            return JSONResponse({"error": "Invalid level"}, status_code=400)
+        set_log_level(level)
+        set_config({"log_level": level})
+        return JSONResponse({"ok": True, "level": level})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
 @app.post("/api/repair-types")
 async def api_repair_types():
     result = repair_types()
@@ -1986,6 +2053,10 @@ async def api_repair_types():
 def main():
     init_db(str(DB_PATH))
     config = get_config("global")
+    # Apply saved log level
+    saved_level = config.get("log_level", "INFO")
+    if saved_level and saved_level != "INFO":
+        set_log_level(saved_level)
     port = config.get("server_port", 8787)
     if isinstance(port, str): port = int(port)
     log.info(f"PSS Server v0.2.0 on http://0.0.0.0:{port}")

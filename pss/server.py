@@ -1,12 +1,12 @@
 """PSS Server -- FastAPI replacement for game_server.py v2."""
 
-import json, os, re, logging, threading, time, secrets, random, hashlib, urllib.request, urllib.error, urllib.parse
+import json, os, re, logging, threading, time, secrets, random, hashlib, urllib.request, urllib.error, urllib.parse, asyncio
 from pathlib import Path
 from datetime import datetime
 import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, UploadFile, File
+from fastapi import FastAPI, Request, UploadFile, File, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
@@ -66,6 +66,44 @@ def set_log_level(level_str="INFO"):
     for h in logging.root.handlers:
         h.setLevel(lvl)
     log.info(f"Log level set to {level_str.upper()}")
+
+
+# === WebSocket broadcast ===
+class WSManager:
+    """Manages WebSocket connections and broadcasts state updates."""
+    def __init__(self):
+        self.connections: list = []
+        self._loop = None
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self.connections.append(ws)
+        log.debug(f"WS connected ({len(self.connections)} active)")
+
+    def disconnect(self, ws: WebSocket):
+        if ws in self.connections:
+            self.connections.remove(ws)
+        log.debug(f"WS disconnected ({len(self.connections)} active)")
+
+    def broadcast(self, event_type: str, data: dict):
+        """Thread-safe broadcast — can be called from worker threads."""
+        if not self.connections:
+            return
+        msg = json.dumps({"type": event_type, "data": data})
+        if self._loop and self._loop.is_running():
+            asyncio.run_coroutine_threadsafe(self._send_all(msg), self._loop)
+
+    async def _send_all(self, msg: str):
+        dead = []
+        for ws in self.connections:
+            try:
+                await ws.send_text(msg)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self.disconnect(ws)
+
+ws_mgr = WSManager()
 
 STEAM_API_KEY = os.environ.get("STEAM_API_KEY", "")
 
@@ -170,6 +208,7 @@ def steamspy_worker():
             phase="running", message=f"Fetching SteamSpy data for {len(to_enrich)} games",
             started_at=time.time())
     log.info(f"SteamSpy enrichment starting: {len(to_enrich)} to process")
+    ws_mgr.broadcast("steamspy", dict(steamspy_state))
     for i, (appid, name) in enumerate(to_enrich):
         if steamspy_state["stop_requested"]:
             with steamspy_lock:
@@ -191,10 +230,12 @@ def steamspy_worker():
         # SteamSpy allows ~4 req/sec, use 0.3s to be safe
         time.sleep(0.3)
         if (i + 1) % 100 == 0:
+            ws_mgr.broadcast("steamspy", dict(steamspy_state))
             log.info(f"SteamSpy checkpoint: {i+1}/{len(to_enrich)}")
     with steamspy_lock:
         steamspy_state.update(completed=len(to_enrich), phase="complete", running=False,
             message=f"Done! {len(to_enrich)} processed, {steamspy_state['skipped']} skipped")
+    ws_mgr.broadcast("steamspy", dict(steamspy_state))
     log.info(f"SteamSpy enrichment complete: {len(to_enrich)} processed, "
              f"{steamspy_state['skipped']} skipped, {steamspy_state['errors']} errors")
 
@@ -705,12 +746,14 @@ def deck_worker():
         # Rate limit: ~0.4s per app (2 calls with 0.2s each)
         time.sleep(0.25)
         if (i + 1) % 100 == 0:
+            ws_mgr.broadcast("deck", dict(deck_state))
             log.info(f"Deck enrichment checkpoint: {i+1}/{len(to_enrich)}")
 
     with deck_lock:
         deck_state.update(completed=len(to_enrich), phase="complete", running=False,
             message=f"Done! {len(to_enrich)} processed, {deck_state['skipped']} skipped, "
                     f"{deck_state['types_corrected']} types corrected")
+    ws_mgr.broadcast("deck", dict(deck_state))
     log.info(f"Deck enrichment complete: {len(to_enrich)} processed, "
              f"{deck_state['skipped']} skipped, {deck_state['types_corrected']} types corrected")
 
@@ -877,6 +920,7 @@ def image_cache_worker():
             message=f"Caching heroes for {len(to_cache)} games"
                     + (f" (SteamGridDB {'enabled' if sgdb_key else 'disabled'})"),
             started_at=time.time())
+    ws_mgr.broadcast("cache", dict(cache_state))
     log.info(f"Image cache starting: {len(to_cache)} to process, SGDB={'yes' if sgdb_key else 'no'}")
 
     for i, (appid, name) in enumerate(to_cache):
@@ -917,6 +961,7 @@ def image_cache_worker():
         time.sleep(delay)
 
         if (i + 1) % 100 == 0:
+            ws_mgr.broadcast("cache", dict(cache_state))
             log.info(f"Image cache checkpoint: {i+1}/{len(to_cache)} "
                      f"(SGDB: {cache_state['sgdb_hits']}, SS: {cache_state['screenshot_hits']}, HDR: {cache_state['header_hits']})")
 
@@ -924,6 +969,7 @@ def image_cache_worker():
         cache_state.update(completed=len(to_cache), phase="complete", running=False,
             message=f"Done! SGDB: {cache_state['sgdb_hits']}, Screenshots: {cache_state['screenshot_hits']}, Headers: {cache_state['header_hits']}, "
                     f"skipped: {cache_state['skipped']}")
+    ws_mgr.broadcast("cache", dict(cache_state))
     log.info(f"Image cache complete: SGDB={cache_state['sgdb_hits']}, "
              f"Screenshots={cache_state['screenshot_hits']}, Headers={cache_state['header_hits']}, skipped={cache_state['skipped']}")
 
@@ -1968,6 +2014,7 @@ def shuffle_cache_worker():
             started_at=time.time()
         )
     log.info(f"Shuffle cache starting: {len(work)} images to process")
+    ws_mgr.broadcast("shuffle", dict(shuffle_state))
 
     for i, (appid, name, source, url) in enumerate(work):
         if shuffle_state["stop_requested"]:
@@ -1996,6 +2043,7 @@ def shuffle_cache_worker():
         # Progress log every 200
         if (i + 1) % 200 == 0:
             elapsed = time.time() - started
+            ws_mgr.broadcast("shuffle", dict(shuffle_state))
             log.info(f"Shuffle cache: {i+1}/{len(work)} (DL: {total_dl}, skip: {total_skip}, err: {total_err})")
 
         # Rate limit: gentle
@@ -2007,6 +2055,7 @@ def shuffle_cache_worker():
             running=False, phase="done",
             message=f"Done! {total_dl} downloaded, {total_skip} already cached, {total_err} errors ({elapsed:.0f}s)"
         )
+    ws_mgr.broadcast("shuffle", dict(shuffle_state))
     log.info(f"Shuffle cache complete: DL={total_dl}, skip={total_skip}, err={total_err} in {elapsed:.0f}s")
     # Auto-cleanup if over limit
     config = get_config("global")
@@ -2173,8 +2222,26 @@ async def api_repair_types():
     return JSONResponse(result)
 
 
+
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await ws_mgr.connect(ws)
+    try:
+        while True:
+            await ws.receive_text()  # keep-alive, ignore client messages
+    except WebSocketDisconnect:
+        ws_mgr.disconnect(ws)
+    except Exception:
+        ws_mgr.disconnect(ws)
+
+
 def main():
     init_db(str(DB_PATH))
+    # Store event loop for WS broadcasts from threads
+    import asyncio as _aio
+    @app.on_event("startup")
+    async def _ws_loop_ref():
+        ws_mgr._loop = _aio.get_running_loop()
     config = get_config("global")
     # Apply saved log level
     saved_level = config.get("log_level", "INFO")

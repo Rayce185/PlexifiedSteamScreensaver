@@ -832,9 +832,55 @@ async function init(){
     buildSortMenu(); buildFilterPanel(); renderPresets(); renderTypeChips();
     // Load default preset
     loadPresetByName('All Games');
-    applyView(); updateStats(); loadSettings(); renderDisplay(); if(window._wyApplyPositions) _wyApplyPositions(); pollEnrichment(); pollSteamSpy(); pollDeck(); pollCache(); renderSSTypes(); initSettingsScrollSpy();
+    applyView(); updateStats(); loadSettings(); renderDisplay(); if(window._wyApplyPositions) _wyApplyPositions(); pollEnrichment(); pollSteamSpy(); pollDeck(); pollCache(); wsConnect(); renderSSTypes(); initSettingsScrollSpy();
   }catch(e){console.error('Init failed',e)}
 }
+
+
+// === WEBSOCKET ===
+let _ws = null, _wsRetry = null, _wsConnected = false;
+
+function wsConnect() {
+  if (_ws && _ws.readyState <= 1) return;
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  _ws = new WebSocket(proto + '//' + location.host + '/ws');
+
+  _ws.onopen = function() {
+    _wsConnected = true;
+    // Disable interval polling — WS takes over
+    stopEnrichPoll(); stopSspyPoll(); stopDeckPoll(); stopCachePoll();
+    if (shufflePoll) { clearInterval(shufflePoll); shufflePoll = null; }
+    console.log('WS connected');
+  };
+
+  _ws.onmessage = function(e) {
+    try {
+      const msg = JSON.parse(e.data);
+      switch(msg.type) {
+        case 'enrichment': pollEnrichment(); break;
+        case 'steamspy':   pollSteamSpy(); break;
+        case 'deck':       pollDeck(); break;
+        case 'cache':      pollCache(); break;
+        case 'shuffle':    pollShuffle(); break;
+      }
+    } catch(ex) {}
+  };
+
+  _ws.onclose = function() {
+    _wsConnected = false;
+    console.log('WS disconnected, falling back to polling');
+    // Re-enable interval polling as fallback
+    startEnrichPoll(); startSspyPoll(); startDeckPoll(); startCachePoll();
+    // Auto-reconnect after 5s
+    clearTimeout(_wsRetry);
+    _wsRetry = setTimeout(wsConnect, 5000);
+  };
+
+  _ws.onerror = function() { _ws.close(); };
+}
+
+function stopCachePoll() { if(cachePoll){clearInterval(cachePoll);cachePoll=null;} }
+function startCachePoll() { if(cachePoll) return; cachePoll=setInterval(pollCache,2000); }
 
 // === FILTERING ===
 function getFiltered(){
@@ -2632,7 +2678,6 @@ window.stopCache = async function() {
   } catch(e) {}
 };
 
-function startCachePoll() { if (cachePoll) return; cachePoll = setInterval(pollCache, 2000); }
 
 async function pollCache() {
   try {

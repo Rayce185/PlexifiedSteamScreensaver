@@ -2008,7 +2008,40 @@ def shuffle_cache_worker():
             message=f"Done! {total_dl} downloaded, {total_skip} already cached, {total_err} errors ({elapsed:.0f}s)"
         )
     log.info(f"Shuffle cache complete: DL={total_dl}, skip={total_skip}, err={total_err} in {elapsed:.0f}s")
+    # Auto-cleanup if over limit
+    config = get_config("global")
+    max_mb = config.get("shuffle_cache_max_mb", 2048)
+    shuffle_cache_cleanup(max_mb)
 
+
+
+
+def shuffle_cache_cleanup(max_mb=2048):
+    """Prune oldest shuffle variant files when cache exceeds max_mb.
+    Only removes {appid}_{hash}.jpg files, never {appid}.jpg (selected heroes)."""
+    variants = [(f, f.stat().st_mtime, f.stat().st_size)
+                for f in CACHE_DIR.glob("*_*.jpg") if f.is_file()]
+    total_bytes = sum(s for _, _, s in variants)
+    max_bytes = max_mb * 1024 * 1024
+
+    if total_bytes <= max_bytes:
+        return 0
+
+    # Sort by oldest first
+    variants.sort(key=lambda x: x[1])
+    removed = 0
+    while total_bytes > max_bytes and variants:
+        f, _, size = variants.pop(0)
+        try:
+            f.unlink()
+            total_bytes -= size
+            removed += 1
+        except Exception:
+            pass
+
+    if removed:
+        log.info(f"Shuffle cache cleanup: removed {removed} files, now {total_bytes/1024/1024:.0f} MB")
+    return removed
 
 @app.get("/api/shuffle-cache/estimate")
 async def api_shuffle_estimate():
@@ -2033,6 +2066,35 @@ async def api_shuffle_start():
 async def api_shuffle_status():
     with shuffle_lock:
         return JSONResponse(dict(shuffle_state))
+
+
+@app.get("/api/shuffle-cache/size")
+async def api_shuffle_size():
+    """Return current shuffle cache disk usage."""
+    variants = list(CACHE_DIR.glob("*_*.jpg"))
+    heroes = list(CACHE_DIR.glob("[0-9]*.jpg"))
+    heroes = [f for f in heroes if "_" not in f.stem]  # only {appid}.jpg
+    var_bytes = sum(f.stat().st_size for f in variants if f.is_file())
+    hero_bytes = sum(f.stat().st_size for f in heroes if f.is_file())
+    return JSONResponse({
+        "variants_count": len(variants),
+        "variants_mb": round(var_bytes / 1024 / 1024, 1),
+        "heroes_count": len(heroes),
+        "heroes_mb": round(hero_bytes / 1024 / 1024, 1),
+        "total_mb": round((var_bytes + hero_bytes) / 1024 / 1024, 1)
+    })
+
+
+@app.post("/api/shuffle-cache/clear")
+async def api_shuffle_clear():
+    """Delete all shuffle variant files ({appid}_{hash}.jpg). Keeps selected heroes."""
+    variants = list(CACHE_DIR.glob("*_*.jpg"))
+    removed = 0
+    for f in variants:
+        try: f.unlink(); removed += 1
+        except: pass
+    log.info(f"Shuffle cache cleared: {removed} files removed")
+    return JSONResponse({"ok": True, "removed": removed})
 
 
 @app.post("/api/shuffle-cache/stop")

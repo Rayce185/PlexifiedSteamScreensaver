@@ -659,6 +659,17 @@ input[type=file]{display:none}
       <div id="shuf-msg" class="enrich-status"></div>
     </div>
 
+    <div class="enrich-panel" style="margin-top:8px">
+      <div class="enrich-header">
+        <div><strong>Image Cache Management</strong><div class="setting-desc" id="cache-size-info">Loading cache info...</div></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-sm" onclick="loadCacheSize()">&#8635;</button>
+          <button class="btn btn-sm" style="color:var(--red)" onclick="clearShuffleCache()">&#128465; Clear Variants</button>
+        </div>
+      </div>
+      <div class="setting-row" style="margin-top:8px"><div><div class="setting-label">Max shuffle cache size</div><div class="setting-desc">Auto-prunes oldest variant files when exceeded after a pre-download completes. 0 = unlimited.</div></div><div class="setting-input"><input type="number" id="cfg-shuffle-max-mb" min="0" max="50000" step="256" style="width:80px"><span class="setting-unit">MB</span></div></div>
+    </div>
+
     <div class="section-title" id="sec-shovelware" style="margin-top:28px">&#9760; Shovelware Detection</div>
     <div class="setting-row"><div><div class="setting-label">Minimum signals to flag</div><div class="setting-desc">How many indicators must trigger before a game is marked as shovelware (1-6)</div></div><div class="setting-input"><input type="number" id="sw-min" min="1" max="6" step="1"></div></div>
     <div class="setting-row"><div><div class="setting-label">Global avg playtime threshold</div><div class="setting-desc">Flag if the global Steam average playtime is below this (minutes)</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-en-avgpt"><span class="toggle-track"></span><span class="toggle-thumb"></span></label><input type="number" id="sw-avgpt" min="0" max="600" step="5"><span class="setting-unit">min</span></div></div>
@@ -2218,6 +2229,8 @@ function loadSettings(){
   document.getElementById('imgmode-selected').classList.toggle('active',im==='selected');
   document.getElementById('imgmode-shuffle').classList.toggle('active',im==='shuffle');
   initLogLevel();
+  loadCacheSize();
+  document.getElementById('cfg-shuffle-max-mb').value = CONFIG.shuffle_cache_max_mb || 2048;
 
 window.saveSettings=async function(){
   const u={
@@ -2470,6 +2483,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   const ae=document.getElementById('cfg-auto-enrich');
   const ar=document.getElementById('cfg-auto-refresh');
   if(ae) ae.addEventListener('change',saveAutoSettings);
+  const smm=document.getElementById('cfg-shuffle-max-mb');
+  if(smm) smm.addEventListener('change', async function(){ const v=parseInt(this.value)||0; CONFIG.shuffle_cache_max_mb=v; await saveConfig({shuffle_cache_max_mb:v}); });
   if(ar) ar.addEventListener('change',saveAutoSettings);
 });
 
@@ -2693,6 +2708,25 @@ function initLogLevel() {
   const lvl = (CONFIG.log_level || 'INFO').toUpperCase();
   document.querySelectorAll('.log-lvl-btn').forEach(b => b.classList.toggle('active', b.textContent === lvl || (b.textContent === 'WARN' && lvl === 'WARNING')));
 }
+
+// === IMAGE CACHE MANAGEMENT ===
+window.loadCacheSize = async function() {
+  try {
+    const resp = await fetch('/api/shuffle-cache/size');
+    const d = await resp.json();
+    const el = document.getElementById('cache-size-info');
+    el.innerHTML = '<strong>' + d.heroes_count + '</strong> hero images (' + d.heroes_mb + ' MB) + <strong>' + d.variants_count + '</strong> shuffle variants (' + d.variants_mb + ' MB) = <strong>' + d.total_mb + ' MB</strong> total';
+  } catch(e) {}
+};
+
+window.clearShuffleCache = async function() {
+  if (!confirm('Delete all shuffle variant images? Selected hero images will be kept.')) return;
+  try {
+    const resp = await fetch('/api/shuffle-cache/clear', {method:'POST'});
+    const d = await resp.json();
+    if(d.ok) { toast(d.removed + ' variant files removed'); loadCacheSize(); }
+  } catch(e) { toast('Clear failed'); }
+};
 
 // === SHUFFLE CACHE ===
 let shufflePoll = null;

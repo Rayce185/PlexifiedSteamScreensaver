@@ -68,7 +68,47 @@ def set_log_level(level_str="INFO"):
     log.info(f"Log level set to {level_str.upper()}")
 
 STEAM_API_KEY = os.environ.get("STEAM_API_KEY", "")
-STEAM_PATH = os.environ.get("STEAM_PATH", r"C:\Program Files (x86)\Steam")
+
+import platform as _platform
+
+def detect_steam_path() -> str:
+    """Auto-detect Steam installation path across Windows, Linux, macOS."""
+    env = os.environ.get("STEAM_PATH")
+    if env and Path(env).exists():
+        return env
+
+    system = _platform.system()
+    candidates = []
+
+    if system == "Windows":
+        candidates = [
+            Path(os.environ.get("PROGRAMFILES(X86)", "")) / "Steam",
+            Path(os.environ.get("PROGRAMFILES", "")) / "Steam",
+            Path.home() / "Steam",
+        ]
+    elif system == "Linux":
+        candidates = [
+            Path.home() / ".local" / "share" / "Steam",
+            Path.home() / ".steam" / "steam",
+            Path.home() / ".steam" / "debian-installation",
+            Path("/usr/share/steam"),  # Flatpak fallback
+        ]
+    elif system == "Darwin":
+        candidates = [
+            Path.home() / "Library" / "Application Support" / "Steam",
+        ]
+
+    for p in candidates:
+        if p.exists() and (p / "config").exists():
+            log.info(f"Steam detected at: {p} ({system})")
+            return str(p)
+
+    # Fallback to platform default (won't exist but gives clear error context)
+    fallback = r"C:\Program Files (x86)\Steam" if system == "Windows" else str(Path.home() / ".local" / "share" / "Steam")
+    log.warning(f"Steam not found. Falling back to: {fallback} — set STEAM_PATH env var to override.")
+    return fallback
+
+STEAM_PATH = detect_steam_path()
 
 enrichment_state = {
     "running": False, "stop_requested": False,

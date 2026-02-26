@@ -1599,14 +1599,20 @@ async def api_image_hero(appid: int):
 
 @app.get("/api/image/{appid}/random")
 async def api_image_random(appid: int):
-    """Serve a random image for this game from all available sources.
-    Downloads and caches as {appid}_{hash}.jpg if not already on disk."""
+    """Serve a random image for this game. Prefers pre-cached shuffle files on disk,
+    falls back to on-demand download if none exist."""
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    # Gather all available URLs
+    # Check for pre-cached shuffle variants on disk first
+    variants = list(CACHE_DIR.glob(f"{appid}_*.jpg"))
+    if variants:
+        chosen = random.choice(variants)
+        return FileResponse(str(chosen), media_type="image/jpeg",
+                           headers={"Cache-Control": "public, max-age=3600"})
+
+    # No shuffle cache — gather URLs and download on-demand
     urls = []
 
-    # 1. Screenshots from enrichment
     from pss.database import get_db
     with get_db() as db:
         row = db.execute("SELECT screenshots FROM enrichment WHERE appid = ?", (appid,)).fetchone()
@@ -1614,45 +1620,28 @@ async def api_image_random(appid: int):
         try:
             thumbs = json.loads(row["screenshots"])
             for t in thumbs:
-                full = re.sub(r'\.\d+x\d+\.', '.1920x1080.', t)
-                urls.append(("screenshot", full))
+                full = re.sub(r'\.\\d+x\\d+\.', '.1920x1080.', t)
+                urls.append(full)
         except Exception:
             pass
 
-    # 2. SGDB heroes (from DB cache, not live API — avoid rate limits)
     cached = get_all_cached_heroes(appid)
     for c in cached:
         if c.get("source") == "sgdb" and c.get("url"):
-            urls.append(("sgdb", c["url"]))
-
-    # 3. Header fallback
-    urls.append(("header", f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"))
+            urls.append(c["url"])
 
     if not urls:
-        # Fall back to selected hero
         return RedirectResponse(url=f"/api/image/{appid}/hero", status_code=302)
 
-    # Pick random
-    source, url = random.choice(urls)
-
-    # Check if already cached on disk
+    url = random.choice(urls)
     url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
     local_path = CACHE_DIR / f"{appid}_{url_hash}.jpg"
 
-    if local_path.exists():
-        return FileResponse(str(local_path), media_type="image/jpeg",
-                           headers={"Cache-Control": "public, max-age=3600"})
-
-    # Download it
     if download_image(url, str(local_path)):
         return FileResponse(str(local_path), media_type="image/jpeg",
                            headers={"Cache-Control": "public, max-age=3600"})
 
-    # Download failed — fall back to selected hero
-    if local_path.exists():
-        local_path.unlink()
     return RedirectResponse(url=f"/api/image/{appid}/hero", status_code=302)
-
 
 @app.get("/api/image/{appid}/options")
 async def api_image_options(appid: int):
@@ -1782,6 +1771,208 @@ async def api_cache_stop():
     with cache_lock:
         cache_state.update(stop_requested=True, message="Stopping...")
     return JSONResponse({"ok": True, "message": "Stop requested"})
+
+
+
+# === SHUFFLE CACHE (pre-download all image variants) ===
+shuffle_state = {
+    "running": False, "stop_requested": False,
+    "total_images": 0, "downloaded": 0, "skipped": 0, "errors": 0,
+    "current_game": "", "phase": "idle", "message": "",
+    "started_at": None
+}
+shuffle_lock = threading.Lock()
+shuffle_thread = None
+
+
+def estimate_shuffle_cache():
+    """Count all available images across all games for shuffle download."""
+    account = get_active_account()
+    if not account:
+        return {"error": "No active account"}
+
+    from pss.database import get_db
+    with get_db() as db:
+        # All games for this account
+        game_rows = db.execute(
+            "SELECT g.appid, g.name FROM games g WHERE g.account_id = ?",
+            (account["steamid64"],)
+        ).fetchall()
+
+        total_images = 0
+        total_games_with_images = 0
+
+        for row in game_rows:
+            appid = row["appid"]
+            count = 0
+
+            # Screenshots from enrichment
+            erow = db.execute("SELECT screenshots FROM enrichment WHERE appid = ?", (appid,)).fetchone()
+            if erow and erow["screenshots"]:
+                try:
+                    ss = json.loads(erow["screenshots"])
+                    count += len(ss)
+                except Exception:
+                    pass
+
+            # SGDB entries from image_cache
+            sgdb = db.execute(
+                "SELECT COUNT(*) as c FROM image_cache WHERE appid = ? AND source = 'sgdb'",
+                (appid,)
+            ).fetchone()
+            if sgdb:
+                count += sgdb["c"]
+
+            if count > 0:
+                total_games_with_images += 1
+                total_images += count
+
+    # Already downloaded shuffle images on disk
+    existing = len(list(CACHE_DIR.glob("*_*.jpg")))
+
+    # Estimate: avg ~180KB per image
+    est_mb = round((total_images - existing) * 0.18, 1)
+    if est_mb < 0:
+        est_mb = 0
+
+    return {
+        "total_games": len(game_rows),
+        "games_with_images": total_games_with_images,
+        "total_images": total_images,
+        "already_cached": existing,
+        "remaining": max(0, total_images - existing),
+        "estimated_mb": est_mb
+    }
+
+
+def shuffle_cache_worker():
+    """Download ALL available images for all games (shuffle mode pre-cache)."""
+    global shuffle_state
+    account = get_active_account()
+    if not account:
+        with shuffle_lock:
+            shuffle_state.update(phase="error", message="No active account", running=False)
+        return
+
+    from pss.database import get_db
+    with get_db() as db:
+        game_rows = db.execute(
+            "SELECT g.appid, g.name FROM games g WHERE g.account_id = ?",
+            (account["steamid64"],)
+        ).fetchall()
+
+    sgdb_key = get_sgdb_key()
+    total_dl = 0
+    total_skip = 0
+    total_err = 0
+    started = time.time()
+
+    # Build full work list: (appid, name, source, url)
+    work = []
+    with get_db() as db:
+        for row in game_rows:
+            appid, name = row["appid"], row["name"]
+
+            # Screenshots
+            erow = db.execute("SELECT screenshots FROM enrichment WHERE appid = ?", (appid,)).fetchone()
+            if erow and erow["screenshots"]:
+                try:
+                    for t in json.loads(erow["screenshots"]):
+                        full = re.sub(r'\.\d+x\d+\.', '.1920x1080.', t)
+                        work.append((appid, name, "screenshot", full))
+                except Exception:
+                    pass
+
+            # SGDB from image_cache table
+            sgdb_rows = db.execute(
+                "SELECT url FROM image_cache WHERE appid = ? AND source = 'sgdb'",
+                (appid,)
+            ).fetchall()
+            for sr in sgdb_rows:
+                work.append((appid, name, "sgdb", sr["url"]))
+
+    with shuffle_lock:
+        shuffle_state.update(
+            total_images=len(work), downloaded=0, skipped=0, errors=0,
+            phase="downloading",
+            message=f"Downloading {len(work)} images...",
+            started_at=time.time()
+        )
+    log.info(f"Shuffle cache starting: {len(work)} images to process")
+
+    for i, (appid, name, source, url) in enumerate(work):
+        if shuffle_state["stop_requested"]:
+            with shuffle_lock:
+                shuffle_state.update(phase="stopped", message=f"Stopped at {i}/{len(work)}", running=False)
+            log.info(f"Shuffle cache stopped at {i}/{len(work)}")
+            return
+
+        url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+        local_path = CACHE_DIR / f"{appid}_{url_hash}.jpg"
+
+        if local_path.exists():
+            total_skip += 1
+        else:
+            if download_image(url, str(local_path)):
+                total_dl += 1
+            else:
+                total_err += 1
+
+        with shuffle_lock:
+            shuffle_state.update(
+                downloaded=total_dl, skipped=total_skip, errors=total_err,
+                current_game=name
+            )
+
+        # Progress log every 200
+        if (i + 1) % 200 == 0:
+            elapsed = time.time() - started
+            log.info(f"Shuffle cache: {i+1}/{len(work)} (DL: {total_dl}, skip: {total_skip}, err: {total_err})")
+
+        # Rate limit: gentle
+        time.sleep(0.1)
+
+    elapsed = time.time() - started
+    with shuffle_lock:
+        shuffle_state.update(
+            running=False, phase="done",
+            message=f"Done! {total_dl} downloaded, {total_skip} already cached, {total_err} errors ({elapsed:.0f}s)"
+        )
+    log.info(f"Shuffle cache complete: DL={total_dl}, skip={total_skip}, err={total_err} in {elapsed:.0f}s")
+
+
+@app.get("/api/shuffle-cache/estimate")
+async def api_shuffle_estimate():
+    return JSONResponse(estimate_shuffle_cache())
+
+
+@app.post("/api/shuffle-cache/start")
+async def api_shuffle_start():
+    global shuffle_thread
+    if shuffle_state["running"]:
+        return JSONResponse({"error": "Already running"}, status_code=409)
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    with shuffle_lock:
+        shuffle_state.update(running=True, stop_requested=False, phase="starting",
+                            message="Starting shuffle cache...", downloaded=0, skipped=0, errors=0)
+    shuffle_thread = threading.Thread(target=shuffle_cache_worker, daemon=True)
+    shuffle_thread.start()
+    return JSONResponse({"ok": True})
+
+
+@app.get("/api/shuffle-cache/status")
+async def api_shuffle_status():
+    with shuffle_lock:
+        return JSONResponse(dict(shuffle_state))
+
+
+@app.post("/api/shuffle-cache/stop")
+async def api_shuffle_stop():
+    if not shuffle_state["running"]:
+        return JSONResponse({"error": "Not running"}, status_code=409)
+    with shuffle_lock:
+        shuffle_state.update(stop_requested=True, message="Stopping...")
+    return JSONResponse({"ok": True})
 
 
 @app.post("/api/repair-types")

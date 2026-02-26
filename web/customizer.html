@@ -634,6 +634,22 @@ input[type=file]{display:none}
       </div>
     </div>
 
+    <div class="enrich-panel" style="margin-top:12px">
+      <div class="enrich-header">
+        <div><strong>Pre-Download Shuffle Images</strong><div class="setting-desc">Download all available image variants (screenshots + SteamGridDB) for every game. Once complete, shuffle mode works entirely from disk with no network requests. This will gradually increase disk usage.</div></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-accent" id="shuf-estimate-btn" onclick="estimateShuffleCache()">&#128270; Check</button>
+          <button class="btn btn-accent" id="shuf-start-btn" onclick="startShuffleCache()" style="display:none">&#9654; Download</button>
+          <button class="btn" id="shuf-stop-btn" onclick="stopShuffleCache()" style="display:none">&#9632; Stop</button>
+        </div>
+      </div>
+      <div id="shuf-estimate" style="display:none;padding:10px 14px;background:rgba(88,166,255,.06);border-radius:6px;margin-top:8px;font-size:.78rem">
+        <div id="shuf-estimate-text"></div>
+      </div>
+      <div class="progress-bar" id="shuf-progress-bar" style="display:none"><div class="progress-fill" id="shuf-progress"></div></div>
+      <div id="shuf-msg" class="enrich-status"></div>
+    </div>
+
     <div class="section-title" id="sec-shovelware" style="margin-top:28px">&#9760; Shovelware Detection</div>
     <div class="setting-row"><div><div class="setting-label">Minimum signals to flag</div><div class="setting-desc">How many indicators must trigger before a game is marked as shovelware (1-6)</div></div><div class="setting-input"><input type="number" id="sw-min" min="1" max="6" step="1"></div></div>
     <div class="setting-row"><div><div class="setting-label">Global avg playtime threshold</div><div class="setting-desc">Flag if the global Steam average playtime is below this (minutes)</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-en-avgpt"><span class="toggle-track"></span><span class="toggle-thumb"></span></label><input type="number" id="sw-avgpt" min="0" max="600" step="5"><span class="setting-unit">min</span></div></div>
@@ -2396,6 +2412,77 @@ async function pollCache() {
     if (!s.running && cachePoll) { clearInterval(cachePoll); cachePoll = null; }
     if (s.phase==='complete' && s.started_at) { const el=Math.round(Date.now()/1000-s.started_at); document.getElementById('cache-eta').textContent='Completed '+s.completed+' in '+fmtTime(el); }
   } catch(e) {}
+}
+
+// === SHUFFLE CACHE ===
+let shufflePoll = null;
+
+window.estimateShuffleCache = async function() {
+  const btn = document.getElementById('shuf-estimate-btn');
+  btn.textContent = '\u23F3 Checking...';
+  try {
+    const resp = await fetch('/api/shuffle-cache/estimate');
+    const d = await resp.json();
+    const el = document.getElementById('shuf-estimate');
+    const txt = document.getElementById('shuf-estimate-text');
+    if (d.remaining > 0) {
+      txt.innerHTML = '<strong>' + d.total_images + '</strong> images available across <strong>' + d.games_with_images + '</strong> games<br>' +
+        '<strong>' + d.already_cached + '</strong> already on disk, <strong>' + d.remaining + '</strong> to download<br>' +
+        'Estimated download: <strong>~' + d.estimated_mb + ' MB</strong>';
+      document.getElementById('shuf-start-btn').style.display = '';
+    } else {
+      txt.innerHTML = '\u2705 All <strong>' + d.total_images + '</strong> images already cached on disk!';
+      document.getElementById('shuf-start-btn').style.display = 'none';
+    }
+    el.style.display = '';
+  } catch (e) {
+    toast('Estimate failed');
+  }
+  btn.textContent = '\uD83D\uDD0D Check';
+};
+
+window.startShuffleCache = async function() {
+  try {
+    await fetch('/api/shuffle-cache/start', {method: 'POST'});
+    document.getElementById('shuf-start-btn').style.display = 'none';
+    document.getElementById('shuf-estimate-btn').style.display = 'none';
+    document.getElementById('shuf-stop-btn').style.display = '';
+    document.getElementById('shuf-progress-bar').style.display = '';
+    document.getElementById('shuf-estimate').style.display = 'none';
+    startShufflePoll();
+  } catch (e) { toast('Start failed'); }
+};
+
+window.stopShuffleCache = async function() {
+  try { await fetch('/api/shuffle-cache/stop', {method: 'POST'}); } catch(e) {}
+};
+
+function startShufflePoll() {
+  if (shufflePoll) return;
+  shufflePoll = setInterval(pollShuffle, 2000);
+}
+
+async function pollShuffle() {
+  try {
+    const resp = await fetch('/api/shuffle-cache/status');
+    const d = await resp.json();
+    const total = d.total_images || 1;
+    const done = d.downloaded + d.skipped;
+    const pct = Math.round(done / total * 100);
+    document.getElementById('shuf-progress').style.width = pct + '%';
+    document.getElementById('shuf-msg').textContent = d.message || '';
+
+    if (!d.running && d.phase !== 'idle' && d.phase !== 'starting') {
+      clearInterval(shufflePoll);
+      shufflePoll = null;
+      document.getElementById('shuf-stop-btn').style.display = 'none';
+      document.getElementById('shuf-estimate-btn').style.display = '';
+      document.getElementById('shuf-start-btn').style.display = 'none';
+      if (d.phase === 'done') {
+        document.getElementById('shuf-msg').textContent = d.message;
+      }
+    }
+  } catch (e) {}
 }
 
 window.setImageMode = async function(mode) {

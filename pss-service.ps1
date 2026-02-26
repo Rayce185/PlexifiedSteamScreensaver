@@ -37,7 +37,7 @@ function Write-Warn   { param([string]$Msg); Write-Status "[WARN] $Msg" 'Yellow'
 function Get-PSSProcess {
     Get-Process python*, pythonw* -ErrorAction SilentlyContinue |
         Where-Object {
-            try { $_.CommandLine -like '*pss.server*' -or $_.CommandLine -like '*pss_start*' }
+            try { $_.CommandLine -like '*pss.server*' -or $_.CommandLine -like '*pss_tray*' }
             catch { $false }
         }
 }

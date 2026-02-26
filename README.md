@@ -31,7 +31,7 @@ wget https://github.com/Rayce185/PlexifiedSteamScreensaver/archive/refs/heads/ma
 unzip main.zip && cd PlexifiedSteamScreensaver-main
 
 # Run (handles deps + setup automatically)
-./pss.sh
+bash pss.sh
 ```
 
 ### After Launch
@@ -133,10 +133,7 @@ In the customizer, go to **Settings** and run enrichment in order:
 3. **Deck & ProtonDB Enrichment** — Deck compat, ProtonDB tier, type correction (~7 min / 1000 games)
 4. **SteamGridDB Image Cache** — hero image alternatives (requires SGDB API key)
 
-## Updating
 
-- **Windows**: Run `Update-PSS.ps1` (preserves `data/` directory)
-- **Linux/macOS**: Run `./update.sh`
 
 ## System Tray
 
@@ -175,7 +172,7 @@ Launch with `--no-server` to start the tray without auto-starting the server:
 pythonw pss_tray.pyw --no-server
 ```
 
-## Running as a Background Service (Headless)
+## Running as a Background Service (Headless / No Desktop)
 
 PSS includes service managers for both platforms. These handle auto-start on boot,
 background execution, and clean start/stop lifecycle.
@@ -244,6 +241,7 @@ For debugging or development, use the interactive launchers:
 | POST | `/api/accounts/switch` | Switch active account |
 | POST | `/api/accounts/{id}/api-key` | Set per-account API key |
 | DELETE | `/api/accounts/{id}/api-key` | Remove per-account API key |
+| DELETE | `/api/accounts/{id}` | Delete account and all data |
 | GET | `/api/auth/steam/login` | Steam OpenID login |
 | GET | `/api/auth/steam/callback` | OpenID callback |
 | GET | `/api/auth/status` | Session status |
@@ -277,6 +275,8 @@ For debugging or development, use the interactive launchers:
 | POST | `/api/shuffle-cache/start` | Start shuffle pre-download |
 | GET | `/api/shuffle-cache/status` | Pre-download progress |
 | POST | `/api/shuffle-cache/stop` | Stop pre-download |
+| GET | `/api/shuffle-cache/size` | Cache disk usage (heroes + variants) |
+| POST | `/api/shuffle-cache/clear` | Delete all shuffle variant files |
 
 ### Configuration & System
 | Method | Path | Description |
@@ -288,6 +288,7 @@ For debugging or development, use the interactive launchers:
 | DELETE | `/api/presets/{id}` | Delete preset |
 | GET | `/api/logs` | Log viewer (tail/filter/search) |
 | POST | `/api/logs/level` | Change log level at runtime |
+| WS | `/ws` | WebSocket for real-time worker updates |
 
 ## Project Structure
 
@@ -304,17 +305,19 @@ PSS/
 │   └── setup.html           # First-run account detection
 ├── data/                    # SQLite database + image cache (gitignored)
 ├── logs/                    # Server logs with archive (gitignored)
-├── Install-PSS.ps1          # Windows first-time setup (PowerShell)
+├── PSS.bat                  # ⭐ Windows — double-click to run
+├── pss.sh                   # ⭐ Linux/macOS — bash pss.sh to run
+├── pss_tray.pyw             # System tray app (both platforms)
+├── Install-PSS.ps1          # Windows manual setup (PowerShell)
 ├── Start-PSS.ps1            # Windows foreground launcher (PowerShell)
 ├── Update-PSS.ps1           # Windows updater (PowerShell, preserves data/)
-├── pss-service.ps1          # Windows service manager (Task Scheduler)
-├── pss-service.sh           # Linux service manager (systemd)
-├── pss_tray.pyw             # System tray app (Windows + Linux)
-├── install.sh               # Linux/macOS first-time setup
-├── start.sh                 # Linux/macOS server launcher
+├── pss-service.ps1          # Windows background service (Task Scheduler)
+├── install.sh               # Linux/macOS manual setup
+├── start.sh                 # Linux/macOS foreground launcher
 ├── update.sh                # Linux/macOS updater
-├── pss_start.pyw            # Headless Windows launcher
-├── migrate_v2.py            # JSON → SQLite migration tool
+├── pss-service.sh           # Linux background service (systemd)
+├── migrate_v2.py            # One-time JSON → SQLite migration (v2 users)
+├── pss.spec                 # PyInstaller build spec
 ├── requirements.txt
 ├── .env.example
 ├── VERSION                  # Current commit hash

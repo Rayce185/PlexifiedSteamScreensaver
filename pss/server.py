@@ -37,12 +37,31 @@ DB_PATH = DATA_DIR / "pss.db"
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Read commit hash from VERSION file
+_version = "unknown"
+_version_file = PSS_ROOT / "VERSION"
+if _version_file.exists():
+    _version = _version_file.read_text().strip()[:7]
+
+# Archive logs from older commits
+_archive_dir = LOG_DIR / "archive"
+for old_log in LOG_DIR.glob("pss_*.log"):
+    # Extract commit from filename: pss_{timestamp}_{commit}.log
+    parts = old_log.stem.split("_")
+    if len(parts) >= 4:
+        log_commit = parts[-1]
+        if log_commit != _version:
+            _archive_dir.mkdir(parents=True, exist_ok=True)
+            old_log.rename(_archive_dir / old_log.name)
+
 _log_ts = datetime.now().strftime("%y%m%d_%H%M%S")
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.FileHandler(LOG_DIR / f"pss_{_log_ts}.log"), logging.StreamHandler()]
+    handlers=[logging.FileHandler(LOG_DIR / f"pss_{_log_ts}_{_version}.log"), logging.StreamHandler()]
 )
 log = logging.getLogger("pss")
+log.info(f"PSS version: {_version}")
 
 STEAM_API_KEY = os.environ.get("STEAM_API_KEY", "")
 STEAM_PATH = os.environ.get("STEAM_PATH", r"C:\Program Files (x86)\Steam")

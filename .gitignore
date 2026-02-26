@@ -1,8 +1,5 @@
 # Data & runtime
-data/*.db
-data/*.db-wal
-data/*.db-shm
-data/*.db.bak.*
+data/
 logs/
 __pycache__/
 *.pyc
@@ -18,4 +15,14 @@ __pycache__/
 # OS
 Thumbs.db
 .DS_Store
-*.bak.*
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+_update_backup/
+
+# Logs
+*.log
+install.log
+start.log

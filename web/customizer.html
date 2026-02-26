@@ -193,7 +193,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .display-split{display:flex;height:100%;overflow:hidden}
 .display-controls{flex:1;overflow-y:auto;padding:20px;min-width:300px}
 .display-preview{width:45%;min-width:360px;flex-shrink:0;border-left:1px solid var(--border);display:flex;flex-direction:column;background:#000}
-.display-preview-label{padding:8px 14px;font-size:.74rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;background:var(--surface);border-bottom:1px solid var(--border)}
+.display-preview-label{padding:8px 14px;font-size:.74rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center}
 .dp-scene{flex:1;position:relative;overflow:hidden;background:#111}
 .dp-bg{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:.6}
 .dp-vignette{position:absolute;top:0;left:0;width:100%;height:100%;background:radial-gradient(ellipse at center,transparent 30%,rgba(0,0,0,.35) 70%,rgba(0,0,0,.7) 100%)}
@@ -226,6 +226,8 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .dp-row-mono .dp-badge{background:rgba(255,255,255,.08)!important;color:rgba(255,255,255,.6)!important;border-color:rgba(255,255,255,.12)!important}
 .dp-row-mono .dp-meta{color:rgba(255,255,255,.5)}
 .dp-row-mono .dp-meta-dim{color:rgba(255,255,255,.3)}
+.dp-row-mono .dp-badge{filter:grayscale(1)}
+.dp-row-mono .dp-meta{filter:grayscale(1)}
 .de-divider{width:1px;height:10px;background:rgba(255,255,255,.2)}
 
 /* DISPLAY ROWS */
@@ -487,7 +489,7 @@ input[type=file]{display:none}
     <div class="display-split">
       <div class="display-controls" id="display-list"></div>
       <div class="display-preview" id="display-preview">
-        <div class="display-preview-label">&#128064; Preview</div>
+        <div class="display-preview-label"><span>&#128064; Preview</span><span style="margin-left:auto;display:flex;gap:4px"><button class="btn btn-sm" onclick="prevPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9664;</button><span id="dp-game-counter" style="font-size:.68rem;line-height:24px;min-width:40px;text-align:center"></span><button class="btn btn-sm" onclick="nextPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9654;</button></span></div>
         <div class="dp-scene" id="dp-scene">
           <img class="dp-bg" id="dp-bg" src="" alt="">
           <div class="dp-vignette"></div>
@@ -1619,56 +1621,118 @@ const ELEMENTS=[
 const SOURCE_LABELS={steam:'Steam Library',store:'Store API',deck:'Deck Compat',protondb:'ProtonDB'};
 const SOURCE_CSS={steam:'de-source-steam',store:'de-source-store',deck:'de-source-deck',protondb:'de-source-protondb'};
 
+let _dpIdx = 0;
+let _dpGames = [];
+
+function getPreviewGames(){
+  if(!ALL||!ALL.length) return [];
+  // Pick games with enrichment data for a good preview
+  const enriched = ALL.filter(g=>g.genres && g.genres.length && g.developer);
+  return enriched.length ? enriched : ALL;
+}
+
+window.prevPreviewGame = function(){
+  if(!_dpGames.length) return;
+  _dpIdx = (_dpIdx - 1 + _dpGames.length) % _dpGames.length;
+  renderDisplayPreview();
+};
+
+window.nextPreviewGame = function(){
+  if(!_dpGames.length) return;
+  _dpIdx = (_dpIdx + 1) % _dpGames.length;
+  renderDisplayPreview();
+};
+
 function renderDisplayPreview(){
   const container=document.getElementById('dp-rows');
   if(!container) return;
   container.innerHTML='';
-  // Set background image
+
+  // Get real game data
+  _dpGames = getPreviewGames();
+  if(!_dpGames.length) return;
+  if(_dpIdx >= _dpGames.length) _dpIdx = 0;
+  const g = _dpGames[_dpIdx];
+
+  // Update counter
+  const counter = document.getElementById('dp-game-counter');
+  if(counter) counter.textContent = (_dpIdx+1)+'/'+_dpGames.length;
+
+  // Set background image from the SAME game
   const bg=document.getElementById('dp-bg');
-  if(bg && !bg.src.includes('/api/image/') && ALL && ALL.length){
-    const sample=ALL[Math.floor(Math.random()*Math.min(ALL.length,50))];
-    if(sample) bg.src='/api/image/'+sample.appid+'/hero';
-  }
-  // Sample game data
-  const S={installed_htpc:true,ever_played:true,playtime_hours:142.3,
-    playtime_windows_hours:98,playtime_deck_hours:44,playtime_linux_hours:0,
-    last_played:'2025-12-15',genres:['Action','RPG','Open World'],
-    developer:'CD Projekt Red',metacritic_score:94,release_date:'Dec 10, 2020',
-    short_description:'An open-world action-adventure story set in Night City',
-    controller_support:'full',vr_support:false,deck_verified:3,
-    protondb_tier:'gold',protondb_total:847,
-    native_platforms:{windows:true,linux:false,mac:false}};
+  if(bg) bg.src='/api/image/'+g.appid+'/hero?t='+g.appid;
+
+  // Set game name
+  const nameEl=document.querySelector('.dp-game-name');
+  if(nameEl) nameEl.textContent=g.name;
+
+  // Build element config
   const elCfg=CONFIG.display_elements||[];
   const cfgMap=Object.fromEntries(elCfg.map(e=>[e.id,e]));
   const merged=ELEMENTS.map(def=>{
     const cfg=cfgMap[def.id]||{enabled:true,order:999,row:0};
     return {...def,enabled:cfg.enabled,order:cfg.order,row:cfg.row||0};
   }).filter(e=>e.enabled).sort((a,b)=>a.order-b.order);
-  // Group by row
+
   const rowNums=[...new Set(merged.map(e=>e.row))].sort((a,b)=>a-b);
+
   function bk(cls,txt){return '<span class="dp-badge '+cls+'">'+txt+'</span>'}
   function mk(txt){return '<span class="dp-meta">'+txt+'</span>'}
   function dk(txt){return '<span class="dp-meta-dim">'+txt+'</span>'}
   function dv(){return '<span class="dp-divider"></span>'}
+
   function renderEl(el){
     switch(el.id){
-      case 'installed_badge': return bk('dp-badge-installed','\u2713 Installed');
-      case 'playtime': return mk(S.playtime_hours+'h played');
-      case 'device_breakdown': return mk('PC '+S.playtime_windows_hours+'h \u00b7 Deck '+S.playtime_deck_hours+'h');
-      case 'last_played': return mk('Last: '+S.last_played);
-      case 'genres': return S.genres.map(g=>bk('dp-badge-genre',g)).join('');
-      case 'developer': return dk(S.developer);
-      case 'metacritic': return bk('dp-badge-meta','\u2605 '+S.metacritic_score);
-      case 'release_date': return dk(S.release_date);
-      case 'description': return mk(S.short_description);
-      case 'controller_support': return bk('dp-badge-controller','\uD83C\uDFAE Full Controller');
-      case 'vr_support': return bk('dp-badge-dim','\uD83E\uDD7D No VR');
-      case 'deck_verified': return bk('dp-badge-deck-v','\u2705 Deck Verified');
-      case 'protondb': return bk('dp-badge-pdb-gold','\uD83E\uDD47 Gold');
-      case 'platforms': return dk('Win');
+      case 'installed_badge':
+        return g.installed_htpc ? bk('dp-badge-installed','\u2713 Installed') : bk('dp-badge-dim','Not installed');
+      case 'playtime':
+        return g.playtime_hours>0 ? mk(g.playtime_hours+'h played') : mk('Never played');
+      case 'device_breakdown':
+        if(g.playtime_hours<=0) return '';
+        var d=[];
+        if(g.playtime_windows_hours>0) d.push('PC '+g.playtime_windows_hours+'h');
+        if(g.playtime_deck_hours>0) d.push('Deck '+g.playtime_deck_hours+'h');
+        if(g.playtime_linux_hours>0) d.push('Linux '+g.playtime_linux_hours+'h');
+        return d.length ? mk(d.join(' \u00b7 ')) : '';
+      case 'last_played':
+        return g.last_played ? mk('Last: '+g.last_played) : '';
+      case 'genres':
+        return (g.genres||[]).slice(0,3).map(t=>bk('dp-badge-genre',t)).join('');
+      case 'developer':
+        return g.developer ? dk(g.developer) : '';
+      case 'metacritic':
+        return g.metacritic_score ? bk('dp-badge-meta','\u2605 '+g.metacritic_score) : '';
+      case 'release_date':
+        return g.release_date ? dk(g.release_date) : '';
+      case 'description':
+        return g.short_description ? mk(g.short_description) : '';
+      case 'controller_support':
+        var cs=g.controller_support||'none';
+        return cs==='full' ? bk('dp-badge-controller','\uD83C\uDFAE Full Controller') :
+               cs==='partial' ? bk('dp-badge-controller','\uD83C\uDFAE Partial') :
+               bk('dp-badge-dim','\uD83C\uDFAE No Controller');
+      case 'vr_support':
+        return g.vr_support ? bk('dp-badge-vr','\uD83E\uDD7D VR') : bk('dp-badge-dim','\uD83E\uDD7D No VR');
+      case 'deck_verified':
+        var dl={3:'\u2705 Deck Verified',2:'\u26A0\uFE0F Deck Playable',1:'\u274C Deck Unsupported',0:'\u2753 Deck Untested'};
+        var dc={3:'dp-badge-deck-v',2:'dp-badge-deck-p',1:'dp-badge-deck-u',0:'dp-badge-dim'};
+        var dv2=g.deck_verified||0;
+        return bk(dc[dv2]||'dp-badge-dim',dl[dv2]||'Deck Unknown');
+      case 'protondb':
+        if(!g.protondb_tier||g.protondb_tier==='pending') return '';
+        var pc={platinum:'dp-badge-pdb-platinum',gold:'dp-badge-pdb-gold',silver:'dp-badge-pdb-silver',bronze:'dp-badge-pdb-bronze',borked:'dp-badge-pdb-borked'};
+        var pi={platinum:'\uD83C\uDFC6',gold:'\uD83E\uDD47',silver:'\uD83E\uDD48',bronze:'\uD83E\uDD49',borked:'\uD83D\uDC80'};
+        var t=g.protondb_tier;
+        return bk(pc[t]||'dp-badge-dim',(pi[t]||'')+' '+t.charAt(0).toUpperCase()+t.slice(1));
+      case 'platforms':
+        if(!g.native_platforms) return '';
+        var p=g.native_platforms,pp=[];
+        if(p.windows) pp.push('Win');if(p.linux) pp.push('Linux');if(p.mac) pp.push('Mac');
+        return pp.length ? dk(pp.join(' / ')) : '';
       default: return '';
     }
   }
+
   rowNums.forEach(rn=>{
     const rs=getRowStyle(rn);
     const rowEls=merged.filter(e=>e.row===rn);
@@ -1677,12 +1741,15 @@ function renderDisplayPreview(){
     if(!rs.color) cls+=' dp-row-mono';
     let h='';
     rowEls.forEach((el,i)=>{
-      if(i>0) h+=dv();
-      h+=renderEl(el);
+      const rendered=renderEl(el);
+      if(!rendered) return;
+      if(h) h+=dv();
+      h+=rendered;
     });
-    container.innerHTML+='<div class="'+cls+'">'+h+'</div>';
+    if(h) container.innerHTML+='<div class="'+cls+'">'+h+'</div>';
   });
 }
+
 
 
 

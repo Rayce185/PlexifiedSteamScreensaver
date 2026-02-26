@@ -2,6 +2,60 @@
 
 A cinematic Ken Burns slideshow screensaver for your Steam game library, with a full web-based customizer UI.
 
+![Status](https://img.shields.io/badge/status-stable-green) ![Python](https://img.shields.io/badge/python-3.11+-blue) ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
+
+---
+
+## Quick Start (2 minutes)
+
+### Windows
+
+1. **Download** → [Click here to download ZIP](https://github.com/Rayce185/PlexifiedSteamScreensaver/archive/refs/heads/main.zip)
+2. **Extract** the ZIP anywhere (e.g. Desktop, Documents)
+3. **Double-click `PSS.bat`**
+
+That's it. The launcher handles everything:
+- Checks if Python is installed (opens download page if not)
+- Installs dependencies automatically
+- Walks you through Steam API key setup on first run
+- Starts PSS with a system tray icon
+
+> **Don't have Python?** The launcher will open the download page for you.
+> Just install it with **"Add Python to PATH" checked**, then double-click `PSS.bat` again.
+
+### Linux / macOS
+
+```bash
+# Download and extract
+wget https://github.com/Rayce185/PlexifiedSteamScreensaver/archive/refs/heads/main.zip
+unzip main.zip && cd PlexifiedSteamScreensaver-main
+
+# Run (handles deps + setup automatically)
+./pss.sh
+```
+
+### After Launch
+
+- A **system tray icon** appears (bottom-right on Windows, panel on Linux)
+- **Right-click** it for Start/Stop/Restart/Quit
+- **Double-click** it to open the Customizer
+- Your browser opens automatically to the Customizer UI
+
+---
+
+## What You Need
+
+| Requirement | Why | How to Get It |
+|-------------|-----|---------------|
+| **Python 3.11+** | PSS runs on Python | [python.org/downloads](https://www.python.org/downloads/) — check "Add to PATH" |
+| **Steam** | Your game library | Already installed if you game on PC |
+| **Steam Web API Key** | Access your library data | [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey) — log in, enter "localhost", copy key |
+| **SteamGridDB API Key** *(optional)* | Better hero images | [steamgriddb.com/profile/preferences/api](https://www.steamgriddb.com/profile/preferences/api) |
+
+> **Everything except Python is handled by the launcher.** You'll be prompted for your API key on first run.
+
+---
+
 ## Features
 
 ### Screensaver
@@ -11,70 +65,52 @@ A cinematic Ken Burns slideshow screensaver for your Steam game library, with a 
 - **Image shuffle mode** — random images per game appearance from screenshots, SteamGridDB, and headers
 
 ### Library Management
-- **Multi-account support** — auto-detects all Steam accounts from `loginusers.vdf`, hot-switches without restart
+- **Multi-account support** — auto-detects all Steam accounts, hot-switches without restart
 - **Per-account API keys** — each Steam account stores its own API key
 - **Complete library coverage** — Steam API v1 + local manifest scan for tools/software not in API
 - **Presets, filters, sorting** — type, genre, installed, played, enriched, NSFW, shovelware, Deck status
 - **Bulk include/exclude** — with undo snapshots
-- **Shovelware detection** — configurable 6-signal scoring (low playtime, few reviews, poor ratio, low owners, unplayed, no metacritic)
+- **Shovelware detection** — configurable 6-signal scoring
 - **NSFW auto-detection** — auto-excludes explicit content from screensaver pool
 
 ### Enrichment Pipeline
 - **Steam Store** — genres, developer, metacritic, controller/VR support, descriptions, screenshots
 - **SteamSpy** — owner counts, global avg playtime, review counts
 - **Steam Deck + ProtonDB** — Valve's official Deck compatibility + community Proton tier
-- **IStoreService type correction** — proper app classification (game/software/tool/dlc/demo/music)
 - **SteamGridDB image cache** — hero images with 16:9 aspect ratio filtering
+- **Type correction** — proper app classification from Steam's authoritative catalog
 
 ### Image System
-- **Per-game image picker** — choose from cached images, SGDB alternatives, screenshots, or upload custom images
-- **Shuffle pre-download** — batch-download all image variants with progress tracking and size estimates
-- **Selected mode** — uses your chosen hero image per game
-- **Shuffle mode** — random image each appearance, prefers disk cache when available
+- **Per-game image picker** — choose from cached images, SGDB alternatives, screenshots, or upload custom
+- **Shuffle mode** — random image each appearance, with batch pre-download option
+- **Cache management** — size tracking, auto-cleanup at configurable limit
 
-### Administration
-- **Steam OpenID authentication** — only known Steam accounts can access the customizer
+### System
+- **Steam OpenID authentication** — only your Steam accounts can access the customizer
+- **System tray app** — start/stop/restart from taskbar, auto-start with OS
+- **WebSocket live updates** — real-time progress for all enrichment workers
 - **Dynamic log level** — DEBUG/INFO/WARNING/ERROR changeable at runtime
-- **Log viewer** — searchable, filterable log viewer in Settings with file selection and archive access
-- **Auto-enrichment** — libraries under configurable threshold auto-enrich on first startup
+- **Searchable log viewer** — built into Settings UI
 
-## Requirements
+---
 
-- **Python 3.11+**
-- **Steam** installed with games
-- **Steam Web API Key** — get one at https://steamcommunity.com/dev/apikey
-- **SteamGridDB API Key** (optional) — for hero image alternatives, get one at https://www.steamgriddb.com/profile/preferences/api
+## Updating
 
-## Quick Start
+### Windows
+Double-click `PSS.bat` — if you downloaded a new ZIP, it just works. Your `data/` folder (database, images) is preserved.
 
-### Windows (PowerShell)
-
+Or use the dedicated updater:
 ```powershell
-1. Right-click Install-PSS.ps1 → "Run with PowerShell"
-2. Enter your Steam API Key when prompted
-3. Right-click Start-PSS.ps1 → "Run with PowerShell"
+# Right-click → Run with PowerShell
+.\Update-PSS.ps1
 ```
 
 ### Linux / macOS
-
 ```bash
-git clone https://github.com/Rayce185/PlexifiedSteamScreensaver.git
-cd PlexifiedSteamScreensaver
-chmod +x install.sh start.sh update.sh
-./install.sh
-./start.sh
+./update.sh
 ```
 
-### Manual Setup
-
-```bash
-pip install -r requirements.txt
-cp .env.example .env
-# Edit .env with your STEAM_API_KEY and STEAM_PATH
-python -m pss.server
-```
-
-Steam path is auto-detected on all platforms. Set `STEAM_PATH` in `.env` to override.
+---
 
 ## First Run
 

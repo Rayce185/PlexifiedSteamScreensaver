@@ -6,7 +6,7 @@ from datetime import datetime
 from contextlib import contextmanager
 
 DB_PATH = None
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -104,7 +104,8 @@ MUTABLE_CONFIG_KEYS = {
     "shovelware_enable_avg_playtime", "shovelware_enable_reviews",
     "shovelware_enable_ratio", "shovelware_enable_owners",
     "shovelware_enable_user_playtime", "shovelware_enable_metacritic",
-    "auto_enrich_threshold", "auto_refresh_on_startup", "watchdog_interval", "sgdb_api_key"
+    "auto_enrich_threshold", "auto_refresh_on_startup", "watchdog_interval", "sgdb_api_key",
+    "display_row_styles"
 }
 
 BUILTIN_PRESETS = [
@@ -130,6 +131,8 @@ def init_db(db_path):
             _migrate_to_v3(db)
         if old_version < 4:
             _migrate_to_v4(db)
+        if old_version < 5:
+            _migrate_to_v5(db)
         db.execute("INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)",
                     ("schema_version", str(SCHEMA_VERSION)))
 
@@ -230,21 +233,36 @@ def _seed_builtin_presets(db, account_id):
                        (account_id, bp["name"], json.dumps(bp["filters"]),
                         bp["sort_field"], bp["sort_dir"]))
 
+
+def _migrate_to_v5(db):
+    """Migration v4 to v5: add row_num to display_elements for multi-row layout."""
+    existing = [r[1] for r in db.execute("PRAGMA table_info(display_elements)").fetchall()]
+    if "row_num" not in existing:
+        db.execute("ALTER TABLE display_elements ADD COLUMN row_num INTEGER DEFAULT 0")
+    # Move description to row 1 for existing users
+    db.execute("UPDATE display_elements SET row_num = 1 WHERE element_id = 'description'")
+    # Seed default row styles if not exists
+    existing_cfg = db.execute("SELECT 1 FROM config WHERE scope='global' AND key='display_row_styles'").fetchone()
+    if not existing_cfg:
+        import json as _json
+        db.execute("INSERT INTO config (scope, key, value) VALUES ('global', 'display_row_styles', ?)",
+                   (_json.dumps([{"row":0,"size":"md","color":True},{"row":1,"size":"sm","color":False}]),))
+
 DEFAULT_DISPLAY_ELEMENTS = [
-    {"id": "installed_badge", "enabled": True, "order": 0},
-    {"id": "playtime", "enabled": True, "order": 1},
-    {"id": "device_breakdown", "enabled": True, "order": 2},
-    {"id": "last_played", "enabled": True, "order": 3},
-    {"id": "genres", "enabled": True, "order": 4},
-    {"id": "developer", "enabled": True, "order": 5},
-    {"id": "metacritic", "enabled": True, "order": 6},
-    {"id": "release_date", "enabled": True, "order": 7},
-    {"id": "description", "enabled": True, "order": 8},
-    {"id": "controller_support", "enabled": True, "order": 9},
-    {"id": "vr_support", "enabled": True, "order": 10},
-    {"id": "platforms", "enabled": True, "order": 11},
-    {"id": "deck_verified", "enabled": False, "order": 12},
-    {"id": "protondb", "enabled": False, "order": 13},
+    {"id": "installed_badge", "enabled": True, "order": 0, "row": 0},
+    {"id": "playtime", "enabled": True, "order": 1, "row": 0},
+    {"id": "device_breakdown", "enabled": True, "order": 2, "row": 0},
+    {"id": "last_played", "enabled": True, "order": 3, "row": 0},
+    {"id": "genres", "enabled": True, "order": 4, "row": 0},
+    {"id": "developer", "enabled": True, "order": 5, "row": 0},
+    {"id": "metacritic", "enabled": True, "order": 6, "row": 0},
+    {"id": "release_date", "enabled": True, "order": 7, "row": 0},
+    {"id": "description", "enabled": True, "order": 8, "row": 1},
+    {"id": "controller_support", "enabled": True, "order": 9, "row": 0},
+    {"id": "vr_support", "enabled": True, "order": 10, "row": 0},
+    {"id": "platforms", "enabled": True, "order": 11, "row": 0},
+    {"id": "deck_verified", "enabled": False, "order": 12, "row": 0},
+    {"id": "protondb", "enabled": False, "order": 13, "row": 0},
 ]
 
 @contextmanager
@@ -686,10 +704,10 @@ def set_config(updates, scope="global"):
 def get_display_elements(account_id):
     with get_db() as db:
         rows = db.execute("""
-            SELECT element_id as id, enabled, sort_order as "order"
-            FROM display_elements WHERE account_id = ? ORDER BY sort_order
+            SELECT element_id as id, enabled, sort_order as "order", COALESCE(row_num, 0) as row
+            FROM display_elements WHERE account_id = ? ORDER BY row_num, sort_order
         """, (account_id,)).fetchall()
-        elements = [{"id": r["id"], "enabled": bool(r["enabled"]), "order": r["order"]} for r in rows]
+        elements = [{"id": r["id"], "enabled": bool(r["enabled"]), "order": r["order"], "row": r["row"]} for r in rows]
         if not elements:
             # Seed defaults on first access
             set_display_elements(account_id, DEFAULT_DISPLAY_ELEMENTS)
@@ -700,8 +718,8 @@ def set_display_elements(account_id, elements):
     with get_db() as db:
         db.execute("DELETE FROM display_elements WHERE account_id = ?", (account_id,))
         for el in elements:
-            db.execute("INSERT INTO display_elements (account_id, element_id, enabled, sort_order) VALUES (?,?,?,?)",
-                       (account_id, el["id"], int(el.get("enabled", True)), el.get("order", 0)))
+            db.execute("INSERT INTO display_elements (account_id, element_id, enabled, sort_order, row_num) VALUES (?,?,?,?,?)",
+                       (account_id, el["id"], int(el.get("enabled", True)), el.get("order", 0), el.get("row", 0)))
 
 # === PRESETS ===
 

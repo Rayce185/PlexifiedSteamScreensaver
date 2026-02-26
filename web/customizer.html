@@ -626,6 +626,14 @@ input[type=file]{display:none}
       </div>
     </div>
 
+    <div class="setting-row" style="margin-top:12px">
+      <div><div class="setting-label">Screensaver Image Mode</div><div class="setting-desc">Selected = use the chosen image for each game. Shuffle = randomly pick from all available images each time a game appears. Shuffle gradually increases disk usage as new images are downloaded.</div></div>
+      <div class="fp-tri">
+        <button id="imgmode-selected" onclick="setImageMode('selected')">Selected</button>
+        <button id="imgmode-shuffle" onclick="setImageMode('shuffle')">Shuffle</button>
+      </div>
+    </div>
+
     <div class="section-title" id="sec-shovelware" style="margin-top:28px">&#9760; Shovelware Detection</div>
     <div class="setting-row"><div><div class="setting-label">Minimum signals to flag</div><div class="setting-desc">How many indicators must trigger before a game is marked as shovelware (1-6)</div></div><div class="setting-input"><input type="number" id="sw-min" min="1" max="6" step="1"></div></div>
     <div class="setting-row"><div><div class="setting-label">Global avg playtime threshold</div><div class="setting-desc">Flag if the global Steam average playtime is below this (minutes)</div></div><div class="setting-input"><label class="toggle"><input type="checkbox" id="sw-en-avgpt"><span class="toggle-track"></span><span class="toggle-thumb"></span></label><input type="number" id="sw-avgpt" min="0" max="600" step="5"><span class="setting-unit">min</span></div></div>
@@ -1957,6 +1965,10 @@ function loadSettings(){
 
 // Load SGDB key
   if(CONFIG.sgdb_api_key) document.getElementById('sgdb-key').value = CONFIG.sgdb_api_key;
+  // Image mode
+  const im=CONFIG.image_mode||'selected';
+  document.getElementById('imgmode-selected').classList.toggle('active',im==='selected');
+  document.getElementById('imgmode-shuffle').classList.toggle('active',im==='shuffle');
 
 window.saveSettings=async function(){
   const u={
@@ -2385,6 +2397,13 @@ async function pollCache() {
     if (s.phase==='complete' && s.started_at) { const el=Math.round(Date.now()/1000-s.started_at); document.getElementById('cache-eta').textContent='Completed '+s.completed+' in '+fmtTime(el); }
   } catch(e) {}
 }
+
+window.setImageMode = async function(mode) {
+  CONFIG.image_mode = mode;
+  await saveConfig({image_mode: mode});
+  document.getElementById('imgmode-selected').classList.toggle('active', mode==='selected');
+  document.getElementById('imgmode-shuffle').classList.toggle('active', mode==='shuffle');
+};
 
 window.saveSgdbKey = async function() {
   const key = document.getElementById('sgdb-key').value.trim();

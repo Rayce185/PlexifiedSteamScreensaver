@@ -1,6 +1,6 @@
 """PSS Server -- FastAPI replacement for game_server.py v2."""
 
-import json, os, re, logging, threading, time, secrets, urllib.request, urllib.error, urllib.parse
+import json, os, re, logging, threading, time, secrets, random, hashlib, urllib.request, urllib.error, urllib.parse
 from pathlib import Path
 from datetime import datetime
 import asyncio
@@ -1595,6 +1595,63 @@ async def api_image_hero(appid: int):
     return RedirectResponse(
         url=f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/library_hero_2x.jpg",
         status_code=302)
+
+
+@app.get("/api/image/{appid}/random")
+async def api_image_random(appid: int):
+    """Serve a random image for this game from all available sources.
+    Downloads and caches as {appid}_{hash}.jpg if not already on disk."""
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Gather all available URLs
+    urls = []
+
+    # 1. Screenshots from enrichment
+    from pss.database import get_db
+    with get_db() as db:
+        row = db.execute("SELECT screenshots FROM enrichment WHERE appid = ?", (appid,)).fetchone()
+    if row and row["screenshots"]:
+        try:
+            thumbs = json.loads(row["screenshots"])
+            for t in thumbs:
+                full = re.sub(r'\.\d+x\d+\.', '.1920x1080.', t)
+                urls.append(("screenshot", full))
+        except Exception:
+            pass
+
+    # 2. SGDB heroes (from DB cache, not live API — avoid rate limits)
+    cached = get_all_cached_heroes(appid)
+    for c in cached:
+        if c.get("source") == "sgdb" and c.get("url"):
+            urls.append(("sgdb", c["url"]))
+
+    # 3. Header fallback
+    urls.append(("header", f"https://cdn.cloudflare.steamstatic.com/steam/apps/{appid}/header.jpg"))
+
+    if not urls:
+        # Fall back to selected hero
+        return RedirectResponse(url=f"/api/image/{appid}/hero", status_code=302)
+
+    # Pick random
+    source, url = random.choice(urls)
+
+    # Check if already cached on disk
+    url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
+    local_path = CACHE_DIR / f"{appid}_{url_hash}.jpg"
+
+    if local_path.exists():
+        return FileResponse(str(local_path), media_type="image/jpeg",
+                           headers={"Cache-Control": "public, max-age=3600"})
+
+    # Download it
+    if download_image(url, str(local_path)):
+        return FileResponse(str(local_path), media_type="image/jpeg",
+                           headers={"Cache-Control": "public, max-age=3600"})
+
+    # Download failed — fall back to selected hero
+    if local_path.exists():
+        local_path.unlink()
+    return RedirectResponse(url=f"/api/image/{appid}/hero", status_code=302)
 
 
 @app.get("/api/image/{appid}/options")

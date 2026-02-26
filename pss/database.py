@@ -105,7 +105,7 @@ MUTABLE_CONFIG_KEYS = {
     "shovelware_enable_ratio", "shovelware_enable_owners",
     "shovelware_enable_user_playtime", "shovelware_enable_metacritic",
     "auto_enrich_threshold", "auto_refresh_on_startup", "watchdog_interval", "sgdb_api_key",
-    "display_row_styles"
+    "display_row_styles", "image_mode"
 }
 
 BUILTIN_PRESETS = [

@@ -225,7 +225,7 @@
     u();setInterval(u,10000);document.getElementById('clock').classList.add('visible');
   }
 
-  function tryImg(g){return new Promise(r=>{const i=new Image();i.onload=()=>r(i.src);i.onerror=()=>{const i2=new Image();i2.onload=()=>r(i2.src);i2.onerror=()=>r(null);i2.src=g.header};i.src='/api/image/'+g.appid+'/hero'})}
+  function tryImg(g){const mode=CONFIG.image_mode||'selected';const ep=mode==='shuffle'?'/api/image/'+g.appid+'/random':'/api/image/'+g.appid+'/hero';return new Promise(r=>{const i=new Image();i.onload=()=>r(i.src);i.onerror=()=>{const i2=new Image();i2.onload=()=>r(i2.src);i2.onerror=()=>r(null);i2.src=g.header};i.src=ep+(mode==='shuffle'?'?t='+Date.now():'')})}
 
   async function preload(i){const g=games[i];const url=await tryImg(g);if(!url){next();return}const ld=document.getElementById('loading');if(!ld.classList.contains('hidden'))ld.classList.add('hidden');show(url,g)}
 

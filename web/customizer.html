@@ -194,7 +194,29 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .display-controls{flex:1;overflow-y:auto;padding:20px;min-width:300px}
 .display-preview{width:45%;min-width:360px;flex-shrink:0;border-left:1px solid var(--border);display:flex;flex-direction:column;background:#000}
 .display-preview-label{padding:8px 14px;font-size:.74rem;color:var(--text-faint);text-transform:uppercase;letter-spacing:.06em;background:var(--surface);border-bottom:1px solid var(--border)}
-.display-preview iframe{flex:1;border:none;width:100%;background:#000}
+.dp-scene{flex:1;position:relative;overflow:hidden;background:#111}
+.dp-bg{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:.6}
+.dp-vignette{position:absolute;top:0;left:0;width:100%;height:100%;background:radial-gradient(ellipse at center,transparent 30%,rgba(0,0,0,.35) 70%,rgba(0,0,0,.7) 100%)}
+.dp-bottom-grad{position:absolute;bottom:0;left:0;width:100%;height:45%;background:linear-gradient(to top,rgba(0,0,0,.9) 0%,rgba(0,0,0,.5) 40%,transparent 100%)}
+.dp-clock{position:absolute;bottom:24px;right:28px;text-align:right}
+.dp-clock-time{color:rgba(255,255,255,.88);font-size:1.8rem;font-weight:200;letter-spacing:.06em;text-shadow:0 2px 16px rgba(0,0,0,.9);line-height:1;font-family:'Outfit',sans-serif}
+.dp-clock-date{color:rgba(255,255,255,.45);font-size:.58rem;font-weight:300;letter-spacing:.18em;text-transform:uppercase;margin-top:3px;text-shadow:0 1px 8px rgba(0,0,0,.8)}
+.dp-game-info{position:absolute;bottom:24px;left:28px;max-width:65%}
+.dp-game-name{font-size:1.3rem;font-weight:500;color:rgba(255,255,255,.95);text-shadow:0 2px 16px rgba(0,0,0,.9);line-height:1.15;margin-bottom:6px;font-family:'Outfit',sans-serif}
+.dp-game-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dp-game-desc{margin-top:5px;color:rgba(255,255,255,.4);font-size:.52rem;font-weight:300;max-width:90%;line-height:1.4;text-shadow:0 1px 6px rgba(0,0,0,.7)}
+.dp-badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:3px;font-size:.52rem;font-weight:400;letter-spacing:.03em;text-shadow:0 1px 6px rgba(0,0,0,.7)}
+.dp-badge-installed{background:rgba(76,175,80,.25);color:rgba(76,175,80,.95);border:1px solid rgba(76,175,80,.3)}
+.dp-badge-genre{background:rgba(88,166,255,.15);color:rgba(88,166,255,.9);border:1px solid rgba(88,166,255,.2)}
+.dp-badge-meta{background:rgba(255,193,7,.2);color:rgba(255,193,7,.95);border:1px solid rgba(255,193,7,.3);font-weight:600}
+.dp-badge-controller{background:rgba(0,150,136,.2);color:rgba(128,203,196,.95);border:1px solid rgba(0,150,136,.3)}
+.dp-badge-vr{background:rgba(156,39,176,.25);color:rgba(206,147,216,.95);border:1px solid rgba(156,39,176,.3)}
+.dp-badge-deck-v{background:rgba(76,175,80,.25);color:rgba(129,199,132,.95);border:1px solid rgba(76,175,80,.3)}
+.dp-badge-pdb-gold{background:rgba(255,215,0,.2);color:rgba(255,213,79,.95);border:1px solid rgba(255,215,0,.25)}
+.dp-badge-dim{background:rgba(128,128,128,.15);color:rgba(180,180,180,.5);border:1px solid rgba(128,128,128,.15)}
+.dp-meta{color:rgba(255,255,255,.55);font-size:.52rem;font-weight:300;text-shadow:0 1px 6px rgba(0,0,0,.7)}
+.dp-meta-dim{color:rgba(255,255,255,.35);font-size:.48rem;font-weight:300;font-style:italic}
+.dp-divider{width:1px;height:10px;background:rgba(255,255,255,.2)}
 
 /* BULK BAR */
 .bulk-bar{display:none;align-items:center;justify-content:space-between;padding:8px 16px;background:rgba(88,166,255,.06);border-bottom:1px solid rgba(88,166,255,.15)}
@@ -426,9 +448,15 @@ input[type=file]{display:none}
   <div class="display-tab">
     <div class="display-split">
       <div class="display-controls" id="display-list"></div>
-      <div class="display-preview">
-        <div class="display-preview-label">&#128064; Live Preview</div>
-        <iframe id="display-preview-frame" src="/screensaver?preview=1"></iframe>
+      <div class="display-preview" id="display-preview">
+        <div class="display-preview-label">&#128064; Preview</div>
+        <div class="dp-scene" id="dp-scene">
+          <img class="dp-bg" id="dp-bg" src="" alt="">
+          <div class="dp-vignette"></div>
+          <div class="dp-bottom-grad"></div>
+          <div class="dp-clock"><div class="dp-clock-time">22:47</div><div class="dp-clock-date">Thursday, February 26</div></div>
+          <div class="dp-game-info"><div class="dp-game-name">The Witcher 3: Wild Hunt</div><div class="dp-game-meta" id="dp-game-meta"></div><div class="dp-game-desc" id="dp-game-desc"></div></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1551,9 +1579,58 @@ const ELEMENTS=[
     {id:'platforms',icon:'\uD83D\uDDA5',name:'Native Platforms',desc:'Which platforms run natively',example:'Win / Linux / Mac',cat:'enriched'}
 ];
 
-function refreshDisplayPreview(){
-  const f=document.getElementById('display-preview-frame');
-  if(f && f.contentWindow) f.contentWindow.location.reload();
+function renderDisplayPreview(){
+  const meta=document.getElementById('dp-game-meta');
+  const desc=document.getElementById('dp-game-desc');
+  if(!meta) return;
+  meta.innerHTML=''; desc.textContent='';
+  // Set background image from a random cached game
+  const bg=document.getElementById('dp-bg');
+  if(bg && !bg.src.includes('/api/image/') && ALL && ALL.length){
+    const sample=ALL[Math.floor(Math.random()*Math.min(ALL.length,50))];
+    if(sample) bg.src='/api/image/'+sample.appid+'/hero';
+  }
+  // Sample game data
+  const S={installed_htpc:true,ever_played:true,playtime_hours:142.3,
+    playtime_windows_hours:98,playtime_deck_hours:44,playtime_linux_hours:0,
+    last_played:'2025-12-15',genres:['Action','RPG','Open World'],
+    developer:'CD Projekt Red',metacritic_score:94,release_date:'Dec 10, 2020',
+    short_description:'An open-world action-adventure story set in Night City',
+    controller_support:'full',vr_support:false,deck_verified:3,
+    protondb_tier:'gold',protondb_total:847,
+    native_platforms:{windows:true,linux:false,mac:false}};
+  const elCfg=CONFIG.display_elements||[];
+  const cfgMap=Object.fromEntries(elCfg.map(e=>[e.id,e]));
+  const enabled=ELEMENTS.map(def=>{
+    const cfg=cfgMap[def.id]||{enabled:true,order:999};
+    return {...def,enabled:cfg.enabled,order:cfg.order};
+  }).filter(e=>e.enabled).sort((a,b)=>a.order-b.order);
+  function bk(cls,txt){return '<span class="dp-badge '+cls+'">'+txt+'</span>'}
+  function mk(txt){return '<span class="dp-meta">'+txt+'</span>'}
+  function dk(txt){return '<span class="dp-meta-dim">'+txt+'</span>'}
+  function dv(){return '<span class="dp-divider"></span>'}
+  let h='',descTxt='';
+  enabled.forEach((el,i)=>{
+    const d=i>0?dv():'';
+    switch(el.id){
+      case 'installed_badge': h+=bk('dp-badge-installed','\u2713 Installed'); break;
+      case 'playtime': h+=d+mk(S.playtime_hours+'h played'); break;
+      case 'device_breakdown': h+=d+mk('PC '+S.playtime_windows_hours+'h \u00b7 Deck '+S.playtime_deck_hours+'h'); break;
+      case 'last_played': h+=d+mk('Last: '+S.last_played); break;
+      case 'genres': h+=d+S.genres.map(g=>bk('dp-badge-genre',g)).join(''); break;
+      case 'developer': h+=d+dk(S.developer); break;
+      case 'metacritic': h+=d+bk('dp-badge-meta','\u2605 '+S.metacritic_score); break;
+      case 'release_date': h+=d+dk(S.release_date); break;
+      case 'description': descTxt=S.short_description; break;
+      case 'controller': h+=d+bk('dp-badge-controller','\uD83C\uDFAE Full Controller'); break;
+      case 'vr_support': h+=d+bk('dp-badge-dim','\uD83E\uDD7D No VR'); break;
+      case 'deck_verified': h+=d+bk('dp-badge-deck-v','\u2705 Deck Verified'); break;
+      case 'protondb': h+=d+bk('dp-badge-pdb-gold','\uD83E\uDD47 Gold'); break;
+      case 'platforms': h+=d+dk('Win'); break;
+    }
+  });
+  meta.innerHTML=h;
+  desc.textContent=descTxt;
 }
 
 function renderDisplay(){
@@ -1571,6 +1648,7 @@ function renderDisplay(){
   html+='<div class="section-title">&#128640; Enriched Data <span class="de-badge de-badge-enriched">requires enrichment</span></div>';
   html+=enriched.map(e=>deCard(e)).join('');
   list.innerHTML=html;
+  renderDisplayPreview();
 }
 
 function deCard(e){
@@ -1582,7 +1660,7 @@ window.toggleDE=function(id,enabled){
   const el=els.find(e=>e.id===id);
   if(el)el.enabled=enabled; else els.push({id,enabled,order:els.length});
   CONFIG.display_elements=els;
-  saveConfig({display_elements:els}); renderDisplay(); refreshDisplayPreview();
+  saveConfig({display_elements:els}); renderDisplay();
 };
 
 window.moveDE=function(id,dir){
@@ -1593,7 +1671,7 @@ window.moveDE=function(id,dir){
   if(swapIdx<0||swapIdx>=els.length)return;
   const t=els[idx].order;els[idx].order=els[swapIdx].order;els[swapIdx].order=t;
   CONFIG.display_elements=els;
-  saveConfig({display_elements:els}); renderDisplay(); refreshDisplayPreview();
+  saveConfig({display_elements:els}); renderDisplay();
 };
 
 async function saveConfig(updates){

@@ -25,17 +25,17 @@ if not errorlevel 1 (
 
 :: Step 1: Backup data folder
 if exist "%DATA_DIR%" (
-    echo [1/5] Backing up data folder...
+    echo [1/6] Backing up data folder...
     if exist "%BACKUP_DIR%" rmdir /S /Q "%BACKUP_DIR%"
     mkdir "%BACKUP_DIR%"
     xcopy "%DATA_DIR%\*" "%BACKUP_DIR%\" /E /I /Q >NUL
     echo       Backed up to _update_backup\
 ) else (
-    echo [1/5] No data folder found - fresh install
+    echo [1/6] No data folder found - fresh install
 )
 
 :: Step 2: Download latest
-echo [2/5] Downloading latest from GitHub...
+echo [2/6] Downloading latest from GitHub...
 powershell -Command "Invoke-WebRequest -Uri '%ZIP_URL%' -OutFile '%ZIP_FILE%'" 2>NUL
 if not exist "%ZIP_FILE%" (
     echo [!] Download failed. Check your internet connection.
@@ -45,12 +45,12 @@ if not exist "%ZIP_FILE%" (
 )
 
 :: Step 3: Extract
-echo [3/5] Extracting...
+echo [3/6] Extracting...
 if exist "%EXTRACT_DIR%" rmdir /S /Q "%EXTRACT_DIR%"
 powershell -Command "Expand-Archive -Path '%ZIP_FILE%' -DestinationPath '%EXTRACT_DIR%' -Force" 2>NUL
 
 :: Step 4: Copy new files over (skip data folder)
-echo [4/5] Updating files...
+echo [4/6] Updating files...
 set "SRC=%EXTRACT_DIR%\PlexifiedSteamScreensaver-main"
 if not exist "%SRC%" (
     echo [!] Extraction failed - unexpected folder structure.
@@ -72,13 +72,23 @@ for /D %%D in ("%SRC%\*") do (
 
 :: Step 5: Restore data folder
 if exist "%BACKUP_DIR%" (
-    echo [5/5] Restoring data...
+    echo [5/6] Restoring data...
     if not exist "%DATA_DIR%" mkdir "%DATA_DIR%"
     xcopy "%BACKUP_DIR%\*" "%DATA_DIR%\" /E /I /Q /Y >NUL
     rmdir /S /Q "%BACKUP_DIR%"
     echo       Data restored successfully.
 ) else (
-    echo [5/5] No data to restore - will be created on first run.
+    echo [5/6] No data to restore - will be created on first run.
+)
+
+
+:: Step 6: Install/update dependencies
+echo [6/6] Installing dependencies...
+pip install -r "%PSS_DIR%requirements.txt" >NUL 2>NUL
+if errorlevel 1 (
+    echo [!] pip install failed. Try running: pip install -r requirements.txt
+) else (
+    echo       Dependencies up to date.
 )
 
 :: Cleanup

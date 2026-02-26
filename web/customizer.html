@@ -163,11 +163,11 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 /* GAME DETAIL PANEL (Phase 5) */
 .game-panel{width:0;overflow:hidden;transition:width .25s ease;flex-shrink:0;display:flex;flex-direction:column;position:relative}
 .game-panel.open{width:var(--gp-width,520px);border-left:1px solid var(--border)}
-.gp-header{position:relative;flex-shrink:0}
+.gp-header{position:relative;flex-shrink:0;width:100%}
 .gp-hero{width:100%;height:220px;object-fit:cover;display:block;background:var(--bg)}
-.gp-close{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);border:none;color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.gp-close{position:sticky;top:8px;float:right;margin-right:8px;z-index:6;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.6);border:none;color:#fff;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .gp-close:hover{background:rgba(0,0,0,.85)}
-.gp-body{flex:1;overflow-y:auto;padding:16px}
+.gp-body{flex:1;overflow-y:auto}
 .gp-name{font-size:1.2rem;font-weight:600;margin-bottom:6px}
 .gp-meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
 .gp-desc{font-size:.82rem;color:var(--text-dim);line-height:1.5;margin-bottom:14px}
@@ -418,11 +418,12 @@ input[type=file]{display:none}
     <!-- Game detail/image picker panel (Phase 5) -->
     <div class="game-panel" id="game-panel">
       <div class="gp-resize" id="gp-resize"></div>
-      <div class="gp-header">
-        <img class="gp-hero" id="gp-hero" src="" alt="">
-        <button class="gp-close" onclick="closeGamePanel()">&times;</button>
-      </div>
       <div class="gp-body">
+        <button class="gp-close" onclick="closeGamePanel()">&times;</button>
+        <div class="gp-header">
+          <img class="gp-hero" id="gp-hero" src="" alt="">
+        </div>
+        <div style="padding:16px">
         <div class="gp-name" id="gp-name"></div>
         <div class="gp-meta" id="gp-meta"></div>
         <div class="gp-desc" id="gp-desc"></div>
@@ -437,6 +438,7 @@ input[type=file]{display:none}
             <button class="btn btn-sm" onclick="resetGameImage()">&#8634; Reset to Auto</button>
             <input type="file" id="gp-upload-input" accept="image/*" style="display:none" onchange="handleImageUpload(event)">
           </div>
+        </div>
         </div>
       </div>
     </div>

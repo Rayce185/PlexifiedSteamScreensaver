@@ -2840,10 +2840,21 @@ function renderAccounts(data) {
       '<div class="acct-actions">' +
         (!isActive ? '<button class="btn btn-sm btn-accent" onclick="switchAccount(\'' + a.steamid64 + '\')">Activate</button>' : '') +
         (a.has_api_key ? '<button class="btn btn-sm btn-red" onclick="removeApiKey(\'' + a.steamid64 + '\')" title="Remove per-account key">Remove Key</button>' : '') +
+        (!isActive ? '<button class="btn btn-sm" onclick="deleteAccount(\'' + a.steamid64 + '\',\'' + (a.persona_name||'Unknown').replace(/'/g,"") + '\')" title="Delete account and all data" style="color:var(--red)">\u{1F5D1}</button>' : '') +
       '</div>' +
     '</div>';
   }).join('');
 }
+
+window.deleteAccount = async function(steamid64, name) {
+  if (!confirm('Delete account "' + name + '" (' + steamid64 + ')?\n\nThis removes all games, exclusions, presets, and display settings for this account. Enrichment data is shared and will be kept.\n\nThis cannot be undone.')) return;
+  try {
+    const resp = await fetch('/api/accounts/' + steamid64, {method: 'DELETE'});
+    const d = await resp.json();
+    if (d.ok) { toast('Account deleted'); loadAccounts(); }
+    else toast(d.error || 'Delete failed');
+  } catch(e) { toast('Delete failed'); }
+};
 
 function updateAccountHeader(active) {
   const el = document.getElementById('acct-header-label');

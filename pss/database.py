@@ -412,6 +412,20 @@ def delete_account_config(steamid64, key):
     with get_db() as db:
         db.execute("DELETE FROM config WHERE scope = ? AND key = ?", (scope, key))
 
+
+def delete_account(steamid64):
+    """Remove an account and all associated data. Does NOT delete shared enrichment/image_cache."""
+    scope = f"account:{steamid64}"
+    with get_db() as db:
+        db.execute("DELETE FROM games WHERE account_id = ?", (steamid64,))
+        db.execute("DELETE FROM exclusions WHERE account_id = ?", (steamid64,))
+        db.execute("DELETE FROM display_elements WHERE account_id = ?", (steamid64,))
+        db.execute("DELETE FROM presets WHERE account_id = ?", (steamid64,))
+        db.execute("DELETE FROM exclusion_snapshots WHERE account_id = ?", (steamid64,))
+        db.execute("DELETE FROM config WHERE scope = ?", (scope,))
+        db.execute("DELETE FROM accounts WHERE steamid64 = ?", (steamid64,))
+    return True
+
 def upsert_account(steamid64, persona_name=None, is_active=False):
     with get_db() as db:
         db.execute("""

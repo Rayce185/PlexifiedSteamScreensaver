@@ -20,7 +20,7 @@ from pss.database import (
     get_enrichment_count, bulk_update_app_types,
     get_exclusions, set_exclusions, toggle_exclusion, bulk_set_exclusions,
     get_full_config, get_config, set_config, set_display_elements,
-    get_account_config, set_account_config, delete_account_config,
+    get_account_config, set_account_config, delete_account_config, delete_account,
     get_presets, save_preset, delete_preset, get_distinct_values,
     snapshot_exclusions, get_exclusion_snapshots, restore_exclusion_snapshot,
     get_cached_hero, get_all_cached_heroes, upsert_image_cache, get_uncached_appids, get_image_cache_stats,
@@ -1474,6 +1474,27 @@ async def api_accounts_set_key(steamid64: str, request: Request):
     set_account_config(steamid64, "steam_api_key", api_key)
     log.info(f"API key set for account {steamid64}")
     return JSONResponse({"ok": True, "steamid64": steamid64, "validated": True})
+
+@app.delete("/api/accounts/{steamid64}")
+async def api_delete_account(steamid64: str, request: Request):
+    """Delete an account and all associated data."""
+    session = verify_session(request.cookies.get(SESSION_COOKIE))
+    if not session:
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    # Cannot delete the active account
+    active = get_active_account()
+    if active and active["steamid64"] == steamid64:
+        return JSONResponse({"error": "Cannot delete the active account. Switch to another account first."}, status_code=400)
+    # Cannot delete your own session account
+    if session.get("steamid64") == steamid64:
+        return JSONResponse({"error": "Cannot delete your own logged-in account."}, status_code=400)
+    all_accts = get_all_accounts()
+    if not any(a["steamid64"] == steamid64 for a in all_accts):
+        return JSONResponse({"error": "Account not found"}, status_code=404)
+    delete_account(steamid64)
+    log.info(f"Account deleted: {steamid64}")
+    return JSONResponse({"ok": True})
+
 
 @app.delete("/api/accounts/{steamid64}/api-key")
 async def api_accounts_delete_key(steamid64: str):

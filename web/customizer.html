@@ -243,9 +243,15 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .de-badge{font-size:.62rem;padding:2px 5px;border-radius:3px;margin-left:6px}
 .de-badge-enriched{background:rgba(188,140,255,.15);color:var(--purple)}
 .de-controls{display:flex;align-items:center;gap:8px;flex-shrink:0}
-.de-arrows{display:flex;flex-direction:column;gap:2px}
-.de-arrow{width:22px;height:16px;border:1px solid var(--border);border-radius:3px;background:transparent;color:var(--text-dim);font-size:.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.de-arrow:hover{color:var(--text);border-color:var(--text-faint);background:var(--surface-hover)}
+.de-drag{cursor:grab;color:var(--text-faint);font-size:1rem;padding:0 4px;user-select:none}
+.de-drag:active{cursor:grabbing}
+.de-card.dragging{opacity:.4;border-style:dashed}
+.de-card.drag-over{border-color:var(--accent);background:rgba(88,166,255,.06)}
+.de-source{font-size:.58rem;padding:2px 5px;border-radius:3px;margin-left:6px}
+.de-source-steam{background:rgba(88,166,255,.12);color:var(--accent)}
+.de-source-store{background:rgba(188,140,255,.12);color:var(--purple)}
+.de-source-deck{background:rgba(76,175,80,.12);color:var(--green)}
+.de-source-protondb{background:rgba(255,193,7,.12);color:var(--orange)}
 .toggle{position:relative;width:34px;height:18px;cursor:pointer;flex-shrink:0}
 .toggle input{display:none}
 .toggle-track{position:absolute;top:0;left:0;width:100%;height:100%;background:var(--border);border-radius:9px;transition:background .2s}
@@ -1565,21 +1571,23 @@ window.switchTab=function(t){
 
 // === DISPLAY TAB ===
 const ELEMENTS=[
-  {id:'installed_badge',icon:'\u2705',name:'Install Status',desc:'Shows whether the game is installed locally',example:'\u2713 Installed / Not installed',cat:'basic'},
-  {id:'playtime',icon:'\u23F1',name:'Playtime',desc:'Total hours played across all platforms',example:'142.3h played',cat:'basic'},
-  {id:'device_breakdown',icon:'\uD83D\uDCBB',name:'Device Breakdown',desc:'Hours split by PC, Deck, Linux, Mac',example:'PC 98h \u00b7 Deck 44h',cat:'basic'},
-  {id:'last_played',icon:'\uD83D\uDCC5',name:'Last Played',desc:'Date the game was last launched',example:'Last: 2025-12-15',cat:'basic'},
-  {id:'genres',icon:'\uD83C\uDFAD',name:'Genre Tags',desc:'Up to 3 genre tags from Steam store',example:'Action \u00b7 RPG \u00b7 Open World',cat:'enriched'},
-  {id:'developer',icon:'\uD83D\uDEE0',name:'Developer',desc:'Game developer/studio name',example:'CD Projekt Red',cat:'enriched'},
-  {id:'metacritic',icon:'\u2B50',name:'Metacritic Score',desc:'Metacritic review score',example:'\u2605 94',cat:'enriched'},
-  {id:'release_date',icon:'\uD83D\uDCC6',name:'Release Date',desc:'Original release date',example:'Dec 10, 2020',cat:'enriched'},
-  {id:'description',icon:'\uD83D\uDCDD',name:'Short Description',desc:'One-liner from the store page',example:'An open-world action adventure...',cat:'enriched'},
-  {id:'controller',icon:'\uD83C\uDFAE',name:'Controller Support',desc:'Full or partial controller',example:'\uD83C\uDFAE Full Controller',cat:'enriched'},
-  {id:'vr_support',icon:'\uD83E\uDD7D',name:'VR Support',desc:'VR headset support badge',example:'\uD83E\uDD7D VR Supported',cat:'enriched'},
-  {id:'deck_verified',icon:'\uD83C\uDFAE',name:'Steam Deck',desc:'Official Deck compatibility rating',example:'\u2705 Verified',cat:'enriched'},
-  {id:'protondb',icon:'\uD83C\uDFC6',name:'ProtonDB',desc:'Community Linux/Proton compatibility',example:'\uD83C\uDFC6 Platinum',cat:'enriched'},
-    {id:'platforms',icon:'\uD83D\uDDA5',name:'Native Platforms',desc:'Which platforms run natively',example:'Win / Linux / Mac',cat:'enriched'}
+  {id:'installed_badge',icon:'\u2705',name:'Install Status',desc:'Shows whether the game is installed locally',example:'\u2713 Installed / Not installed',source:'steam'},
+  {id:'playtime',icon:'\u23F1',name:'Playtime',desc:'Total hours played across all platforms',example:'142.3h played',source:'steam'},
+  {id:'device_breakdown',icon:'\uD83D\uDCBB',name:'Device Breakdown',desc:'Hours split by PC, Deck, Linux, Mac',example:'PC 98h \u00b7 Deck 44h',source:'steam'},
+  {id:'last_played',icon:'\uD83D\uDCC5',name:'Last Played',desc:'Date the game was last launched',example:'Last: 2025-12-15',source:'steam'},
+  {id:'genres',icon:'\uD83C\uDFAD',name:'Genre Tags',desc:'Up to 3 genre tags from Steam store',example:'Action \u00b7 RPG \u00b7 Open World',source:'store'},
+  {id:'developer',icon:'\uD83D\uDEE0',name:'Developer',desc:'Game developer/studio name',example:'CD Projekt Red',source:'store'},
+  {id:'metacritic',icon:'\u2B50',name:'Metacritic Score',desc:'Metacritic review score',example:'\u2605 94',source:'store'},
+  {id:'release_date',icon:'\uD83D\uDCC6',name:'Release Date',desc:'Original release date',example:'Dec 10, 2020',source:'store'},
+  {id:'description',icon:'\uD83D\uDCDD',name:'Short Description',desc:'One-liner from the store page',example:'An open-world action adventure...',source:'store'},
+  {id:'controller',icon:'\uD83C\uDFAE',name:'Controller Support',desc:'Full or partial controller',example:'\uD83C\uDFAE Full Controller',source:'store'},
+  {id:'vr_support',icon:'\uD83E\uDD7D',name:'VR Support',desc:'VR headset support badge',example:'\uD83E\uDD7D VR Supported',source:'store'},
+  {id:'deck_verified',icon:'\uD83C\uDFAE',name:'Steam Deck',desc:'Official Deck compatibility rating',example:'\u2705 Verified',source:'deck'},
+  {id:'protondb',icon:'\uD83C\uDFC6',name:'ProtonDB',desc:'Community Linux/Proton compatibility',example:'\uD83C\uDFC6 Platinum',source:'protondb'},
+  {id:'platforms',icon:'\uD83D\uDDA5',name:'Native Platforms',desc:'Which platforms run natively',example:'Win / Linux / Mac',source:'store'}
 ];
+const SOURCE_LABELS={steam:'Steam Library',store:'Store API',deck:'Deck Compat',protondb:'ProtonDB'};
+const SOURCE_CSS={steam:'de-source-steam',store:'de-source-store',deck:'de-source-deck',protondb:'de-source-protondb'};
 
 function renderDisplayPreview(){
   const meta=document.getElementById('dp-game-meta');
@@ -1643,18 +1651,14 @@ function renderDisplay(){
     const cfg=cfgMap[def.id]||{enabled:true,order:999};
     return {...def,enabled:cfg.enabled,order:cfg.order};
   }).sort((a,b)=>a.order-b.order);
-  const basic=merged.filter(e=>e.cat==='basic');
-  const enriched=merged.filter(e=>e.cat==='enriched');
-  let html='<div class="section-title">&#128218; Basic Info</div>';
-  html+=basic.map(e=>deCard(e)).join('');
-  html+='<div class="section-title">&#128640; Enriched Data <span class="de-badge de-badge-enriched">requires enrichment</span></div>';
-  html+=enriched.map(e=>deCard(e)).join('');
-  list.innerHTML=html;
+  list.innerHTML=merged.map(e=>deCard(e)).join('');
+  initDragDrop();
   renderDisplayPreview();
 }
 
 function deCard(e){
-  return '<div class="de-card '+(e.enabled?'':'disabled')+'"><div class="de-icon">'+e.icon+'</div><div class="de-info"><div class="de-name">'+e.name+(e.cat==='enriched'?' <span class="de-badge de-badge-enriched">enriched</span>':'')+'</div><div class="de-desc">'+e.desc+'</div><div class="de-example">'+e.example+'</div></div><div class="de-controls"><div class="de-arrows"><button class="de-arrow" onclick="moveDE(\''+e.id+'\',-1)" title="Up">&#9650;</button><button class="de-arrow" onclick="moveDE(\''+e.id+'\',1)" title="Down">&#9660;</button></div><label class="toggle"><input type="checkbox" '+(e.enabled?'checked':'')+' onchange="toggleDE(\''+e.id+'\',this.checked)"><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div></div>';
+  const srcBadge=e.source!=='steam'?' <span class="de-source '+(SOURCE_CSS[e.source]||'')+'">'+SOURCE_LABELS[e.source]+'</span>':'';
+  return '<div class="de-card '+(e.enabled?'':'disabled')+'" draggable="true" data-de-id="'+e.id+'"><div class="de-drag" title="Drag to reorder">\u2630</div><div class="de-icon">'+e.icon+'</div><div class="de-info"><div class="de-name">'+e.name+srcBadge+'</div><div class="de-desc">'+e.desc+'</div><div class="de-example">'+e.example+'</div></div><div class="de-controls"><label class="toggle"><input type="checkbox" '+(e.enabled?'checked':'')+' onchange="toggleDE(\''+e.id+'\',this.checked)"><span class="toggle-track"></span><span class="toggle-thumb"></span></label></div></div>';
 }
 
 window.toggleDE=function(id,enabled){
@@ -1665,16 +1669,50 @@ window.toggleDE=function(id,enabled){
   saveConfig({display_elements:els}); renderDisplay();
 };
 
-window.moveDE=function(id,dir){
-  const els=(CONFIG.display_elements||[]).sort((a,b)=>a.order-b.order);
-  const idx=els.findIndex(e=>e.id===id);
-  if(idx<0)return;
-  const swapIdx=idx+dir;
-  if(swapIdx<0||swapIdx>=els.length)return;
-  const t=els[idx].order;els[idx].order=els[swapIdx].order;els[swapIdx].order=t;
-  CONFIG.display_elements=els;
-  saveConfig({display_elements:els}); renderDisplay();
-};
+// === DRAG AND DROP REORDER ===
+function initDragDrop(){
+  let dragId=null;
+  document.querySelectorAll('.de-card[draggable]').forEach(card=>{
+    card.addEventListener('dragstart',e=>{
+      dragId=card.dataset.deId;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move';
+    });
+    card.addEventListener('dragend',()=>{
+      card.classList.remove('dragging');
+      document.querySelectorAll('.de-card.drag-over').forEach(c=>c.classList.remove('drag-over'));
+      // Read new order from DOM
+      const cards=[...document.querySelectorAll('.de-card[data-de-id]')];
+      const els=cards.map((c,i)=>{
+        const id=c.dataset.deId;
+        const existing=(CONFIG.display_elements||[]).find(e=>e.id===id);
+        return {id,enabled:existing?existing.enabled:true,order:i};
+      });
+      CONFIG.display_elements=els;
+      saveConfig({display_elements:els});
+      renderDisplayPreview();
+    });
+    card.addEventListener('dragover',e=>{
+      e.preventDefault();
+      e.dataTransfer.dropEffect='move';
+      if(card.dataset.deId!==dragId) card.classList.add('drag-over');
+    });
+    card.addEventListener('dragleave',()=>card.classList.remove('drag-over'));
+    card.addEventListener('drop',e=>{
+      e.preventDefault();
+      card.classList.remove('drag-over');
+      if(!dragId||card.dataset.deId===dragId) return;
+      const list=card.parentElement;
+      const dragged=list.querySelector('[data-de-id="'+dragId+'"]');
+      if(!dragged) return;
+      const rect=card.getBoundingClientRect();
+      const mid=rect.top+rect.height/2;
+      if(e.clientY<mid) list.insertBefore(dragged,card);
+      else list.insertBefore(dragged,card.nextSibling);
+    });
+  });
+}
+
 
 async function saveConfig(updates){
   try{await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(updates)});toast('Saved')}catch(e){toast('Save failed')}

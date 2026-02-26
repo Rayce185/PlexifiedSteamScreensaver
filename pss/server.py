@@ -46,14 +46,10 @@ if _version_file.exists():
 
 # Archive logs from older commits
 _archive_dir = LOG_DIR / "archive"
-for old_log in LOG_DIR.glob("pss_*.log"):
-    # Extract commit from filename: pss_{timestamp}_{commit}.log
-    parts = old_log.stem.split("_")
-    if len(parts) >= 4:
-        log_commit = parts[-1]
-        if log_commit != _version:
-            _archive_dir.mkdir(parents=True, exist_ok=True)
-            old_log.rename(_archive_dir / old_log.name)
+for old_log in LOG_DIR.glob("pss*.log"):
+    if _version not in old_log.stem:
+        _archive_dir.mkdir(parents=True, exist_ok=True)
+        old_log.rename(_archive_dir / old_log.name)
 
 _log_ts = datetime.now().strftime("%y%m%d_%H%M%S")
 logging.basicConfig(

@@ -22,18 +22,26 @@ That's it. No Python. No command line. No installs.
 - Enter your **Steam Web API Key** when prompted ([get one here](https://steamcommunity.com/dev/apikey))
 - Done — PSS is running
 
-### Linux / macOS — Script Launcher
+### Linux — Download and Run
+
+1. Go to [**Releases**](https://github.com/Rayce185/PlexifiedSteamScreensaver/releases/latest)
+2. Download `PSS-Linux-vX.X.X.tar.gz`
+3. Extract and run:
 
 ```bash
-# Download and extract
-wget https://github.com/Rayce185/PlexifiedSteamScreensaver/releases/latest/download/PSS-Source-vX.X.X.zip
-unzip PSS-Source-*.zip && cd PSS-Source
-
-# Run (auto-installs dependencies, guides you through setup)
-bash pss.sh
+tar xzf PSS-Linux-*.tar.gz
+./PSS/PSS
 ```
 
-> Requires Python 3.11+ (`sudo apt install python3 python3-pip` on Ubuntu/Debian)
+No Python install needed — everything is bundled.
+
+> **Alternative (from source):** If you prefer using your system Python:
+> ```bash
+> wget https://github.com/Rayce185/PlexifiedSteamScreensaver/releases/latest/download/PSS-Source-vX.X.X.zip
+> unzip PSS-Source-*.zip && cd PSS-Source
+> bash pss.sh
+> ```
+> Requires Python 3.11+ (`sudo apt install python3 python3-pip`)
 
 ### After Launch
 
@@ -47,12 +55,12 @@ bash pss.sh
 
 ## What You Need
 
-| Requirement | Windows .exe | Linux/macOS |
-|-------------|:---:|:---:|
-| **Python 3.11+** | Bundled ✓ | Install separately |
-| **Steam** | Installed on PC | Installed on PC |
-| **Steam Web API Key** | Prompted on first run | Prompted on first run |
-| **SteamGridDB Key** *(optional)* | Enter in Settings UI | Enter in Settings UI |
+| Requirement | Windows .exe | Linux binary | Source |
+|-------------|:---:|:---:|:---:|
+| **Python 3.11+** | Bundled ✓ | Bundled ✓ | Install separately |
+| **Steam** | ✓ Installed | ✓ Installed | ✓ Installed |
+| **Steam Web API Key** | Prompted on first run | Prompted on first run | Prompted on first run |
+| **SteamGridDB Key** *(optional)* | Settings UI | Settings UI | Settings UI |
 
 > **Steam Web API Key**: [steamcommunity.com/dev/apikey](https://steamcommunity.com/dev/apikey) — log in, enter "localhost" as domain, copy the key.
 > **SteamGridDB Key** *(optional, for better images)*: [steamgriddb.com/profile/preferences/api](https://www.steamgriddb.com/profile/preferences/api)

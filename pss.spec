@@ -36,7 +36,9 @@ a = Analysis(
         'uvicorn.lifespan',
         'uvicorn.lifespan.on',
         # pystray backends
-        'pystray._win32' if sys.platform == 'win32' else 'pystray._xorg',
+        'pystray._win32',
+        'pystray._xorg',
+        'pystray._appindicator',
         # PSS modules
         'pss',
         'pss.server',

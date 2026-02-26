@@ -38,8 +38,46 @@ jobs:
           name: PSS-Windows
           path: PSS-Windows-${{ github.ref_name }}.zip
 
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgirepository1.0-dev libcairo2-dev gir1.2-ayatanaappindicator3-0.1
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Write version
+        run: echo "${{ github.ref_name }}" > VERSION
+
+      - name: Build binary
+        run: pyinstaller pss.spec
+
+      - name: Make executable
+        run: chmod +x dist/PSS/PSS
+
+      - name: Create tarball
+        run: tar -czf PSS-Linux-${{ github.ref_name }}.tar.gz -C dist PSS
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PSS-Linux
+          path: PSS-Linux-${{ github.ref_name }}.tar.gz
+
   release:
-    needs: [build-windows]
+    needs: [build-windows, build-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +85,7 @@ jobs:
       - name: Write version
         run: echo "${{ github.ref_name }}" > VERSION
 
-      - name: Create source ZIP (Linux/macOS)
+      - name: Create source ZIP (any platform with Python)
         run: |
           mkdir -p PSS-Source
           cp -r pss web *.py *.pyw *.sh *.ps1 *.bat *.spec requirements.txt .env.example VERSION README.md PSS-Source/
@@ -58,11 +96,16 @@ jobs:
         with:
           name: PSS-Windows
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: PSS-Linux
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             PSS-Windows-${{ github.ref_name }}.zip
+            PSS-Linux-${{ github.ref_name }}.tar.gz
             PSS-Source-${{ github.ref_name }}.zip
           generate_release_notes: true
           body: |
@@ -71,10 +114,11 @@ jobs:
             | Platform | File | Instructions |
             |----------|------|-------------|
             | **Windows** | `PSS-Windows-${{ github.ref_name }}.zip` | Extract → Double-click `PSS.exe` |
-            | **Linux / macOS** | `PSS-Source-${{ github.ref_name }}.zip` | Extract → `bash pss.sh` (requires Python 3.11+) |
+            | **Linux** | `PSS-Linux-${{ github.ref_name }}.tar.gz` | Extract → Run `./PSS/PSS` |
+            | **Source** | `PSS-Source-${{ github.ref_name }}.zip` | Extract → `bash pss.sh` (requires Python 3.11+) |
 
             ### First Time?
-            1. Download and extract the ZIP for your platform
+            1. Download and extract the archive for your platform
             2. Run it — you'll be guided through Steam API key setup
             3. A system tray icon appears — right-click for options
 

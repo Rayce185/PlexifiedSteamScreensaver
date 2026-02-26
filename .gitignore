@@ -26,3 +26,4 @@ _update_backup/
 *.log
 install.log
 start.log
+*.bak*

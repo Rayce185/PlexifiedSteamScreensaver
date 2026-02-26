@@ -1610,7 +1610,7 @@ const ELEMENTS=[
   {id:'metacritic',icon:'\u2B50',name:'Metacritic Score',desc:'Metacritic review score',example:'\u2605 94',source:'store'},
   {id:'release_date',icon:'\uD83D\uDCC6',name:'Release Date',desc:'Original release date',example:'Dec 10, 2020',source:'store'},
   {id:'description',icon:'\uD83D\uDCDD',name:'Short Description',desc:'One-liner from the store page',example:'An open-world action adventure...',source:'store'},
-  {id:'controller',icon:'\uD83C\uDFAE',name:'Controller Support',desc:'Full or partial controller',example:'\uD83C\uDFAE Full Controller',source:'store'},
+  {id:'controller_support',icon:'\uD83C\uDFAE',name:'Controller Support',desc:'Full or partial controller',example:'\uD83C\uDFAE Full Controller',source:'store'},
   {id:'vr_support',icon:'\uD83E\uDD7D',name:'VR Support',desc:'VR headset support badge',example:'\uD83E\uDD7D VR Supported',source:'store'},
   {id:'deck_verified',icon:'\uD83C\uDFAE',name:'Steam Deck',desc:'Official Deck compatibility rating',example:'\u2705 Verified',source:'deck'},
   {id:'protondb',icon:'\uD83C\uDFC6',name:'ProtonDB',desc:'Community Linux/Proton compatibility',example:'\uD83C\uDFC6 Platinum',source:'protondb'},
@@ -1661,7 +1661,7 @@ function renderDisplayPreview(){
       case 'metacritic': return bk('dp-badge-meta','\u2605 '+S.metacritic_score);
       case 'release_date': return dk(S.release_date);
       case 'description': return mk(S.short_description);
-      case 'controller': return bk('dp-badge-controller','\uD83C\uDFAE Full Controller');
+      case 'controller_support': return bk('dp-badge-controller','\uD83C\uDFAE Full Controller');
       case 'vr_support': return bk('dp-badge-dim','\uD83E\uDD7D No VR');
       case 'deck_verified': return bk('dp-badge-deck-v','\u2705 Deck Verified');
       case 'protondb': return bk('dp-badge-pdb-gold','\uD83E\uDD47 Gold');

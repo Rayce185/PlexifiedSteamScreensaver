@@ -41,6 +41,19 @@
   .meta-text { color: rgba(255,255,255,0.55); font-size: 0.9rem; font-weight: 300; text-shadow: 0 1px 8px rgba(0,0,0,0.7); }
   .meta-dim { color: rgba(255,255,255,0.35); font-size: 0.82rem; font-weight: 300; font-style: italic; }
   .meta-divider { width: 1px; height: 14px; background: rgba(255,255,255,0.2); }
+  .meta-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
+  .meta-row:first-child { margin-top: 0; }
+  .meta-row.row-sm .badge { font-size: 0.7rem; padding: 2px 8px; }
+  .meta-row.row-sm .meta-text { font-size: 0.75rem; }
+  .meta-row.row-sm .meta-dim { font-size: 0.68rem; }
+  .meta-row.row-sm .meta-divider { height: 10px; }
+  .meta-row.row-lg .badge { font-size: 1rem; padding: 6px 14px; }
+  .meta-row.row-lg .meta-text { font-size: 1.05rem; }
+  .meta-row.row-lg .meta-dim { font-size: 0.95rem; }
+  .meta-row.row-lg .meta-divider { height: 18px; }
+  .meta-row.row-mono .badge { background: rgba(255,255,255,0.08) !important; color: rgba(255,255,255,0.55) !important; border-color: rgba(255,255,255,0.12) !important; }
+  .meta-row.row-mono .meta-text { color: rgba(255,255,255,0.45); }
+  .meta-row.row-mono .meta-dim { color: rgba(255,255,255,0.3); }
   .loading { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 100; background: #000; display: flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.3); font-size: 1.2rem; font-weight: 200; letter-spacing: 0.2em; transition: opacity 1s ease; }
   .loading.hidden { opacity: 0; pointer-events: none; }
 </style>
@@ -52,13 +65,13 @@
 <div class="slide" id="slide-a"><img id="img-a" alt=""></div>
 <div class="slide" id="slide-b"><img id="img-b" alt=""></div>
 <div class="clock" id="clock"><div class="clock-time" id="clock-time"></div><div class="clock-date" id="clock-date"></div></div>
-<div class="game-info" id="game-info"><div class="game-name" id="game-name"></div><div class="game-meta" id="game-meta"></div></div>
+<div class="game-info" id="game-info"><div class="game-name" id="game-name"></div></div>
 <script>
 (function() {
   'use strict';
   let CONFIG = { screensaver_slide_duration_seconds:12, screensaver_transition_seconds:2.5, screensaver_title_delay_seconds:3, ken_burns_intensity:0.7, display_elements:[] };
   const KB = ['kb1','kb2','kb3','kb4','kb5','kb6','kb7','kb8'];
-  let games=[], idx=0, active='a', slideT=null, titleT=null, enabledElements=[];
+  let games=[], idx=0, active='a', slideT=null, titleT=null, enabledElements=[], rowStyles=[];
 
   function buildKB(s) {
     const st = document.getElementById('kb-style') || document.createElement('style');
@@ -121,12 +134,13 @@
       addDiv(m); m.appendChild(metaDim(g.release_date));
     },
     description(g,m) {
-      // Show as a second line below meta
       if(!g.short_description) return;
-      const d=document.createElement('div');
-      d.style.cssText='margin-top:8px;color:rgba(255,255,255,0.4);font-size:0.82rem;font-weight:300;max-width:50vw;line-height:1.4;text-shadow:0 1px 8px rgba(0,0,0,0.7)';
+      addDiv(m);
+      const d=document.createElement('span');
+      d.className='meta-dim';
+      d.style.cssText='max-width:50vw;line-height:1.4';
       d.textContent=g.short_description;
-      document.getElementById('game-info').appendChild(d);
+      m.appendChild(d);
     },
     controller_support(g,m) {
       const cs=g.controller_support||'none';
@@ -175,7 +189,8 @@
       const cr=await fetch('/api/config'); if(cr.ok) CONFIG={...CONFIG,...(await cr.json())};
       document.documentElement.style.setProperty('--transition',CONFIG.screensaver_transition_seconds+'s');
       buildKB(CONFIG.ken_burns_intensity||0.7);
-      enabledElements=(CONFIG.display_elements||[]).filter(e=>e.enabled).sort((a,b)=>a.order-b.order).map(e=>e.id);
+      enabledElements=(CONFIG.display_elements||[]).filter(e=>e.enabled).sort((a,b)=>(a.row||0)-(b.row||0)||a.order-b.order);
+      rowStyles=CONFIG.display_row_styles||[{row:0,size:'md',color:true}];
       const gr=await fetch('/api/games'); const all=await gr.json();
       const ssTypes=CONFIG.screensaver_types||['game'];
       const params=new URLSearchParams(window.location.search);
@@ -235,12 +250,30 @@
 
   function updateInfo(g){
     const info=document.getElementById('game-info');
-    // Remove any previous description div
-    info.querySelectorAll('div:not(.game-name):not(.game-meta)').forEach(d=>d.remove());
+    // Remove previous rows
+    info.querySelectorAll('.meta-row,.game-meta,div:not(.game-name)').forEach(d=>d.remove());
     document.getElementById('game-name').textContent=g.name;
-    const m=document.getElementById('game-meta');
-    m.innerHTML='';
-    enabledElements.forEach(id=>{if(RENDERERS[id])RENDERERS[id](g,m)});
+    // Group elements by row
+    const byRow={};
+    enabledElements.forEach(el=>{
+      const rn=el.row||0;
+      if(!byRow[rn]) byRow[rn]=[];
+      byRow[rn].push(el);
+    });
+    const rowNums=Object.keys(byRow).map(Number).sort((a,b)=>a-b);
+    rowNums.forEach(rn=>{
+      const rs=rowStyles.find(s=>s.row===rn)||{size:'md',color:true};
+      const row=document.createElement('div');
+      let cls='meta-row';
+      if(rs.size==='sm') cls+=' row-sm';
+      else if(rs.size==='lg') cls+=' row-lg';
+      if(!rs.color) cls+=' row-mono';
+      row.className=cls;
+      byRow[rn].forEach(el=>{
+        if(RENDERERS[el.id]) RENDERERS[el.id](g,row);
+      });
+      if(row.children.length) info.appendChild(row);
+    });
   }
 
   init();

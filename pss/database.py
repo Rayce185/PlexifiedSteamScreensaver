@@ -105,7 +105,7 @@ MUTABLE_CONFIG_KEYS = {
     "shovelware_enable_ratio", "shovelware_enable_owners",
     "shovelware_enable_user_playtime", "shovelware_enable_metacritic",
     "auto_enrich_threshold", "auto_refresh_on_startup", "watchdog_interval", "sgdb_api_key",
-    "display_row_styles", "image_mode"
+    "display_row_styles", "image_mode", "overlay_positions"
 }
 
 BUILTIN_PRESETS = [
@@ -685,6 +685,12 @@ def get_full_config(account_id=None):
     # Ensure screensaver_types has a default
     if "screensaver_types" not in config:
         config["screensaver_types"] = ["game"]
+    # Default overlay positions (percentage-based)
+    if "overlay_positions" not in config:
+        config["overlay_positions"] = {
+            "game_info": {"bottom": 4.4, "left": 3.5},
+            "clock": {"bottom": 4.4, "right": 3.5}
+        }
     return config
 
 def set_config(updates, scope="global"):

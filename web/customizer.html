@@ -200,12 +200,18 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .dp-bg{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:.6}
 .dp-vignette{position:absolute;top:0;left:0;width:100%;height:100%;background:radial-gradient(ellipse at center,transparent 30%,rgba(0,0,0,.35) 70%,rgba(0,0,0,.7) 100%)}
 .dp-bottom-grad{position:absolute;bottom:0;left:0;width:100%;height:45%;background:linear-gradient(to top,rgba(0,0,0,.9) 0%,rgba(0,0,0,.5) 40%,transparent 100%)}
-.dp-clock{position:absolute;bottom:24px;right:28px;text-align:right}
+.dp-clock{position:absolute;bottom:var(--dp-clock-b,8%);right:var(--dp-clock-r,4%);text-align:right}
 .dp-clock-time{color:rgba(255,255,255,.88);font-size:1.8rem;font-weight:200;letter-spacing:.06em;text-shadow:0 2px 16px rgba(0,0,0,.9);line-height:1;font-family:'Outfit',sans-serif}
 .dp-clock-date{color:rgba(255,255,255,.45);font-size:.58rem;font-weight:300;letter-spacing:.18em;text-transform:uppercase;margin-top:3px;text-shadow:0 1px 8px rgba(0,0,0,.8)}
-.dp-game-info{position:absolute;bottom:24px;left:28px;max-width:65%}
+.dp-game-info{position:absolute;bottom:var(--dp-gi-b,8%);left:var(--dp-gi-l,4%);max-width:65%}
 .dp-game-name{font-size:1.3rem;font-weight:500;color:rgba(255,255,255,.95);text-shadow:0 2px 16px rgba(0,0,0,.9);line-height:1.15;margin-bottom:6px;font-family:'Outfit',sans-serif}
 .dp-game-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+.dp-scene.wysiwyg .dp-game-info,.dp-scene.wysiwyg .dp-clock{outline:2px dashed rgba(88,166,255,.5);outline-offset:4px;cursor:grab;border-radius:4px;transition:outline-color .15s}
+.dp-scene.wysiwyg .dp-game-info:hover,.dp-scene.wysiwyg .dp-clock:hover{outline-color:rgba(88,166,255,.9)}
+.dp-scene.wysiwyg .dp-game-info.wy-dragging,.dp-scene.wysiwyg .dp-clock.wy-dragging{outline-color:#58a6ff;cursor:grabbing;z-index:50}
+.wy-label{position:absolute;top:-18px;left:0;font-size:.55rem;color:rgba(88,166,255,.8);text-transform:uppercase;letter-spacing:.08em;pointer-events:none;white-space:nowrap}
+.wy-coords{position:absolute;bottom:-16px;left:0;font-size:.5rem;color:rgba(255,255,255,.4);font-family:monospace;pointer-events:none;white-space:nowrap}
 .dp-game-desc{margin-top:5px;color:rgba(255,255,255,.4);font-size:.52rem;font-weight:300;max-width:90%;line-height:1.4;text-shadow:0 1px 6px rgba(0,0,0,.7)}
 .dp-badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:3px;font-size:.52rem;font-weight:400;letter-spacing:.03em;text-shadow:0 1px 6px rgba(0,0,0,.7)}
 .dp-badge-installed{background:rgba(76,175,80,.25);color:rgba(76,175,80,.95);border:1px solid rgba(76,175,80,.3)}
@@ -491,7 +497,7 @@ input[type=file]{display:none}
     <div class="display-split">
       <div class="display-controls" id="display-list"></div>
       <div class="display-preview" id="display-preview"><div class="dp-resize" id="dp-resize"></div>
-        <div class="display-preview-label"><span>&#128064; Preview</span><span style="margin-left:auto;display:flex;gap:4px"><button class="btn btn-sm" onclick="prevPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9664;</button><span id="dp-game-counter" style="font-size:.68rem;line-height:24px;min-width:40px;text-align:center"></span><button class="btn btn-sm" onclick="nextPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9654;</button></span></div>
+        <div class="display-preview-label"><span>&#128064; Preview</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm" id="wy-edit-btn" onclick="enterLayoutEdit()" style="padding:1px 8px;font-size:.7rem">&#9998; Edit Layout</button><button class="btn btn-sm btn-accent" id="wy-save-btn" onclick="exitLayoutEdit(true)" style="padding:1px 8px;font-size:.7rem;display:none">&#10003; Save</button><button class="btn btn-sm" id="wy-cancel-btn" onclick="exitLayoutEdit(false)" style="padding:1px 8px;font-size:.7rem;display:none">&#10005; Cancel</button><button class="btn btn-sm" onclick="prevPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9664;</button><span id="dp-game-counter" style="font-size:.68rem;line-height:24px;min-width:40px;text-align:center"></span><button class="btn btn-sm" onclick="nextPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9654;</button></span></div>
         <div class="dp-scene" id="dp-scene">
           <img class="dp-bg" id="dp-bg" src="" alt="">
           <div class="dp-vignette"></div>
@@ -797,7 +803,7 @@ async function init(){
     buildSortMenu(); buildFilterPanel(); renderPresets(); renderTypeChips();
     // Load default preset
     loadPresetByName('All Games');
-    applyView(); updateStats(); loadSettings(); renderDisplay(); pollEnrichment(); pollSteamSpy(); pollDeck(); pollCache(); renderSSTypes(); initSettingsScrollSpy();
+    applyView(); updateStats(); loadSettings(); renderDisplay(); if(window._wyApplyPositions) _wyApplyPositions(); pollEnrichment(); pollSteamSpy(); pollDeck(); pollCache(); renderSSTypes(); initSettingsScrollSpy();
   }catch(e){console.error('Init failed',e)}
 }
 
@@ -1467,6 +1473,183 @@ window.refreshPanel = function() {
     document.body.style.userSelect = '';
   });
 })();
+
+// === WYSIWYG OVERLAY LAYOUT EDITOR ===
+(function(){
+  const scene = document.getElementById('dp-scene');
+  const giEl  = document.querySelector('.dp-game-info');
+  const clkEl = document.querySelector('.dp-clock');
+  if(!scene || !giEl || !clkEl) return;
+
+  let _wyActive = false, _wyDrag = null, _wyStartX, _wyStartY, _wyOrigL, _wyOrigT;
+  let _wySaved = null; // backup positions for cancel
+
+  function posFromConfig() {
+    const pos = (window.CONFIG||{}).overlay_positions || {game_info:{bottom:4.4,left:3.5},clock:{bottom:4.4,right:3.5}};
+    applyPos(giEl, pos.game_info, 'gi');
+    applyPos(clkEl, pos.clock, 'clk');
+  }
+
+  function applyPos(el, p, prefix) {
+    el.style.top = el.style.bottom = el.style.left = el.style.right = '';
+    scene.style.removeProperty('--dp-'+prefix+'-b');
+    scene.style.removeProperty('--dp-'+prefix+'-l');
+    // We use inline styles for precise control
+    if(p.top != null)    el.style.top    = p.top + '%';
+    if(p.bottom != null) el.style.bottom = p.bottom + '%';
+    if(p.left != null)   el.style.left   = p.left + '%';
+    if(p.right != null)  el.style.right  = p.right + '%';
+    if(prefix === 'clk') clkEl.style.textAlign = ('right' in p) ? 'right' : 'left';
+    updateCoordLabel(el, p);
+  }
+
+  function updateCoordLabel(el, p) {
+    let lbl = el.querySelector('.wy-coords');
+    if(!lbl) return;
+    const parts = [];
+    if(p.top != null) parts.push('top:'+p.top.toFixed(1)+'%');
+    if(p.bottom != null) parts.push('bottom:'+p.bottom.toFixed(1)+'%');
+    if(p.left != null) parts.push('left:'+p.left.toFixed(1)+'%');
+    if(p.right != null) parts.push('right:'+p.right.toFixed(1)+'%');
+    lbl.textContent = parts.join(' ');
+  }
+
+  function addLabels() {
+    [['Game Info', giEl],['Clock', clkEl]].forEach(([name, el]) => {
+      if(!el.querySelector('.wy-label')) {
+        const l = document.createElement('span'); l.className='wy-label'; l.textContent=name;
+        el.appendChild(l);
+      }
+      if(!el.querySelector('.wy-coords')) {
+        const c = document.createElement('span'); c.className='wy-coords'; c.textContent='';
+        el.appendChild(c);
+      }
+    });
+  }
+
+  function removeLabels() {
+    [giEl, clkEl].forEach(el => {
+      el.querySelectorAll('.wy-label,.wy-coords').forEach(n => n.remove());
+    });
+  }
+
+  function getCurrentPos(el) {
+    const sr = scene.getBoundingClientRect();
+    const er = el.getBoundingClientRect();
+    const cx = (er.left + er.width/2) - sr.left;
+    const cy = (er.top + er.height/2) - sr.top;
+    const pos = {};
+    if(cy < sr.height/2) pos.top = ((er.top - sr.top) / sr.height * 100);
+    else pos.bottom = ((sr.bottom - er.bottom) / sr.height * 100);
+    if(cx < sr.width/2) pos.left = ((er.left - sr.left) / sr.width * 100);
+    else pos.right = ((sr.right - er.right) / sr.width * 100);
+    // Clamp
+    Object.keys(pos).forEach(k => pos[k] = Math.max(0, Math.min(92, pos[k])));
+    return pos;
+  }
+
+  function onMouseDown(e, el) {
+    if(!_wyActive) return;
+    e.preventDefault();
+    _wyDrag = el;
+    _wyStartX = e.clientX;
+    _wyStartY = e.clientY;
+    const r = el.getBoundingClientRect();
+    const sr = scene.getBoundingClientRect();
+    _wyOrigL = r.left - sr.left;
+    _wyOrigT = r.top - sr.top;
+    el.classList.add('wy-dragging');
+    // Switch to top/left during drag for smooth movement
+    el.style.top = _wyOrigT + 'px'; el.style.bottom = 'auto';
+    el.style.left = _wyOrigL + 'px'; el.style.right = 'auto';
+  }
+
+  document.addEventListener('mousemove', function(e) {
+    if(!_wyDrag) return;
+    const sr = scene.getBoundingClientRect();
+    const dx = e.clientX - _wyStartX;
+    const dy = e.clientY - _wyStartY;
+    let newL = _wyOrigL + dx;
+    let newT = _wyOrigT + dy;
+    // Clamp within scene
+    const er = _wyDrag.getBoundingClientRect();
+    newL = Math.max(0, Math.min(sr.width - er.width, newL));
+    newT = Math.max(0, Math.min(sr.height - er.height, newT));
+    _wyDrag.style.left = newL + 'px';
+    _wyDrag.style.top = newT + 'px';
+    // Update coordinate label live
+    const pos = getCurrentPos(_wyDrag);
+    updateCoordLabel(_wyDrag, pos);
+  });
+
+  document.addEventListener('mouseup', function() {
+    if(!_wyDrag) return;
+    const el = _wyDrag;
+    el.classList.remove('wy-dragging');
+    // Convert to edge-percentage position
+    const pos = getCurrentPos(el);
+    el.style.top = el.style.bottom = el.style.left = el.style.right = '';
+    if(pos.top != null) el.style.top = pos.top + '%';
+    if(pos.bottom != null) el.style.bottom = pos.bottom + '%';
+    if(pos.left != null) el.style.left = pos.left + '%';
+    if(pos.right != null) el.style.right = pos.right + '%';
+    if(el === clkEl) clkEl.style.textAlign = ('right' in pos) ? 'right' : 'left';
+    updateCoordLabel(el, pos);
+    _wyDrag = null;
+  });
+
+  window.enterLayoutEdit = function() {
+    _wyActive = true;
+    scene.classList.add('wysiwyg');
+    addLabels();
+    // Snapshot current positions for cancel
+    _wySaved = {
+      game_info: getCurrentPos(giEl),
+      clock: getCurrentPos(clkEl)
+    };
+    updateCoordLabel(giEl, _wySaved.game_info);
+    updateCoordLabel(clkEl, _wySaved.clock);
+    document.getElementById('wy-edit-btn').style.display = 'none';
+    document.getElementById('wy-save-btn').style.display = '';
+    document.getElementById('wy-cancel-btn').style.display = '';
+  };
+
+  window.exitLayoutEdit = async function(save) {
+    _wyActive = false;
+    scene.classList.remove('wysiwyg');
+    removeLabels();
+    document.getElementById('wy-edit-btn').style.display = '';
+    document.getElementById('wy-save-btn').style.display = 'none';
+    document.getElementById('wy-cancel-btn').style.display = 'none';
+
+    if(save) {
+      const positions = {
+        game_info: getCurrentPos(giEl),
+        clock: getCurrentPos(clkEl)
+      };
+      // Round to 1 decimal
+      Object.values(positions).forEach(p => Object.keys(p).forEach(k => p[k] = Math.round(p[k]*10)/10));
+      try {
+        await fetch('/api/config', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({overlay_positions:positions})});
+        CONFIG.overlay_positions = positions;
+        toast('Layout saved');
+      } catch(e) { toast('Save failed'); }
+    } else {
+      // Revert to saved
+      if(_wySaved) {
+        applyPos(giEl, _wySaved.game_info, 'gi');
+        applyPos(clkEl, _wySaved.clock, 'clk');
+      }
+    }
+  };
+
+  // Apply positions from config on load
+  window._wyApplyPositions = posFromConfig;
+
+  giEl.addEventListener('mousedown', function(e) { onMouseDown(e, giEl); });
+  clkEl.addEventListener('mousedown', function(e) { onMouseDown(e, clkEl); });
+})();
+
 
 
 
@@ -2686,7 +2869,7 @@ async function reloadAllData() {
     ]);
     ALL=gr; CONFIG=cr; PRESETS=pr; FVALS=fv;
     renderPresets(); renderTypeChips(); applyView(); updateStats();
-    loadSettings(); renderDisplay(); renderSSTypes();
+    loadSettings(); renderDisplay(); if(window._wyApplyPositions) _wyApplyPositions(); renderSSTypes();
   } catch(e) { console.error('reloadAllData failed', e); }
 }
 

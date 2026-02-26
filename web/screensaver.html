@@ -14,11 +14,11 @@
   .slide img { position: absolute; width: 100%; height: 100%; top: 0; left: 0; object-fit: cover; will-change: transform; transform-origin: center center; }
   .vignette { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10; pointer-events: none; background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.3) 70%, rgba(0,0,0,0.65) 100%); }
   .bottom-grad { position: fixed; bottom: 0; left: 0; width: 100vw; height: 40vh; z-index: 11; pointer-events: none; background: linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.55) 35%, rgba(0,0,0,0.15) 70%, transparent 100%); }
-  .clock { position: fixed; bottom: 44px; right: 56px; z-index: 20; text-align: right; opacity: 0; transition: opacity 1s ease; }
+  .clock { position: fixed; z-index: 20; text-align: right; opacity: 0; transition: opacity 1s ease; }
   .clock.visible { opacity: 1; }
   .clock-time { color: rgba(255,255,255,0.88); font-size: 3.6rem; font-weight: 200; letter-spacing: 0.06em; text-shadow: 0 2px 24px rgba(0,0,0,0.9); line-height: 1; }
   .clock-date { color: rgba(255,255,255,0.45); font-size: 1.05rem; font-weight: 300; letter-spacing: 0.18em; text-transform: uppercase; margin-top: 6px; text-shadow: 0 1px 12px rgba(0,0,0,0.8); }
-  .game-info { position: fixed; bottom: 44px; left: 56px; z-index: 20; max-width: 60vw; opacity: 0; transform: translateY(12px); transition: opacity 1.2s ease, transform 1.2s ease; }
+  .game-info { position: fixed; z-index: 20; max-width: 60vw; opacity: 0; transform: translateY(12px); transition: opacity 1.2s ease, transform 1.2s ease; }
   .game-info.visible { opacity: 1; transform: translateY(0); }
   .game-name { font-size: 2.6rem; font-weight: 500; color: rgba(255,255,255,0.95); text-shadow: 0 2px 20px rgba(0,0,0,0.9); line-height: 1.15; margin-bottom: 10px; }
   .game-meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
@@ -186,6 +186,23 @@
   function metaDim(t){const e=document.createElement('span');e.className='meta-dim';e.textContent=t;return e}
   function addDiv(m){if(m.children.length){const e=document.createElement('span');e.className='meta-divider';m.appendChild(e)}}
 
+  function applyOverlayPositions() {
+    const pos = CONFIG.overlay_positions || {game_info:{bottom:4.4,left:3.5},clock:{bottom:4.4,right:3.5}};
+    const gi = document.getElementById('game-info');
+    const cl = document.getElementById('clock');
+    // Reset all edges
+    [gi, cl].forEach(el => { if(el){el.style.top='auto';el.style.bottom='auto';el.style.left='auto';el.style.right='auto';}});
+    if (gi && pos.game_info) {
+      Object.entries(pos.game_info).forEach(([k,v]) => gi.style[k] = v + '%');
+    }
+    if (cl && pos.clock) {
+      Object.entries(pos.clock).forEach(([k,v]) => cl.style[k] = v + '%');
+      // Align text based on horizontal position
+      if ('right' in pos.clock) cl.style.textAlign = 'right';
+      else cl.style.textAlign = 'left';
+    }
+  }
+
   async function init() {
     try {
       const cr=await fetch('/api/config'); if(cr.ok) CONFIG={...CONFIG,...(await cr.json())};
@@ -193,6 +210,7 @@
       buildKB(CONFIG.ken_burns_intensity||0.7);
       enabledElements=(CONFIG.display_elements||[]).filter(e=>e.enabled).sort((a,b)=>(a.row||0)-(b.row||0)||a.order-b.order);
       rowStyles=CONFIG.display_row_styles||[{row:0,size:'md',color:true}];
+      applyOverlayPositions();
       const gr=await fetch('/api/games'); const all=await gr.json();
       const ssTypes=CONFIG.screensaver_types||['game'];
       const params=new URLSearchParams(window.location.search);

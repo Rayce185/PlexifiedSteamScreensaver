@@ -2606,7 +2606,7 @@ window.renameTypeStart=function(idx,oldType){
     '<option value="">Select...</option>'+opts+'</select>'+
     '<input id="tm-rename-inp-'+idx+'" type="text" class="tm-rename-input" placeholder="Custom type..." style="display:none">'+
     '<button class="btn btn-sm btn-accent" onclick="renameTypeConfirm('+idx+',\\x27'+esc(oldType)+'\\x27)" style="padding:1px 8px;font-size:.72rem">Apply</button>'+
-    '<button class="btn btn-sm" onclick="document.getElementById('tm-rename-'+idx+'').style.display='none'" style="padding:1px 8px;font-size:.72rem">Cancel</button>';
+    '<button class="btn btn-sm" onclick="document.getElementById(\x27tm-rename-'+idx+'\x27).style.display=\x27none\x27" style="padding:1px 8px;font-size:.72rem">Cancel</button>';
 };
 
 window.tmRenameSelChange=function(idx){

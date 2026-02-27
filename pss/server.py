@@ -48,8 +48,11 @@ if _version_file.exists():
 _archive_dir = LOG_DIR / "archive"
 for old_log in LOG_DIR.glob("pss*.log"):
     if _version not in old_log.stem:
-        _archive_dir.mkdir(parents=True, exist_ok=True)
-        old_log.rename(_archive_dir / old_log.name)
+        try:
+            _archive_dir.mkdir(parents=True, exist_ok=True)
+            old_log.rename(_archive_dir / old_log.name)
+        except PermissionError:
+            pass  # Skip files locked by other processes (e.g. tray stderr)
 
 _log_ts = datetime.now().strftime("%y%m%d_%H%M%S")
 logging.basicConfig(

@@ -602,7 +602,7 @@ def get_type_stats(account_id):
     """Get all distinct types with game counts and game lists for a given account."""
     with get_db() as db:
         rows = db.execute("""
-            SELECT g.appid, g.name, COALESCE(e.type, g.type, 'game') as resolved_type
+            SELECT g.appid, g.name, COALESCE(e.type, 'game') as resolved_type
             FROM games g
             LEFT JOIN enrichment e ON g.appid = e.appid
             WHERE g.account_id = ?

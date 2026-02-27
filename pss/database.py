@@ -598,6 +598,34 @@ def update_app_type(appid, app_type):
         db.execute("UPDATE enrichment SET type = ? WHERE appid = ?", (app_type, appid))
 
 
+def get_type_stats(account_id):
+    """Get all distinct types with game counts and game lists for a given account."""
+    with get_db() as db:
+        rows = db.execute("""
+            SELECT g.appid, g.name, COALESCE(e.type, g.type, 'game') as resolved_type
+            FROM games g
+            LEFT JOIN enrichment e ON g.appid = e.appid
+            WHERE g.account_id = ?
+            ORDER BY resolved_type, g.name
+        """, (account_id,)).fetchall()
+    # Group by type
+    types = {}
+    for r in rows:
+        t = r["resolved_type"] or "game"
+        if t not in types:
+            types[t] = {"type": t, "count": 0, "games": []}
+        types[t]["count"] += 1
+        types[t]["games"].append({"appid": r["appid"], "name": r["name"]})
+    return sorted(types.values(), key=lambda x: (-x["count"], x["type"]))
+
+
+def rename_type(old_type, new_type):
+    """Bulk rename all games of old_type to new_type in enrichment table. Returns count."""
+    with get_db() as db:
+        r = db.execute("UPDATE enrichment SET type = ? WHERE type = ?", (new_type, old_type))
+        return r.rowcount
+
+
 def bulk_update_app_types(type_map):
     """Bulk update app types from a {appid: type} dict. Only updates enriched apps."""
     with get_db() as db:

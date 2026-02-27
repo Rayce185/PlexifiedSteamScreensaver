@@ -17,7 +17,7 @@ from pss.database import (
     upsert_enrichment, upsert_steamspy, upsert_deck_protondb,
     get_unenriched_appids, get_steamspy_unenriched_appids,
     get_deck_unenriched_appids, get_all_enriched_appids,
-    get_enrichment_count, update_app_type, bulk_update_app_types,
+    get_enrichment_count, update_app_type, bulk_update_app_types, get_type_stats, rename_type,
     get_exclusions, set_exclusions, toggle_exclusion, bulk_set_exclusions,
     get_full_config, get_config, set_config, set_display_elements,
     get_account_config, set_account_config, delete_account_config, delete_account,
@@ -2254,6 +2254,30 @@ async def api_set_game_type(appid: int, request: Request):
     update_app_type(appid, new_type)
     log.info(f"Type override: appid {appid} -> {new_type}")
     return JSONResponse({"ok": True, "appid": appid, "type": new_type})
+
+@app.get("/api/type-stats")
+async def api_type_stats():
+    """Get all distinct types with counts and game lists."""
+    acct = _active_account()
+    if not acct:
+        return JSONResponse({"error": "No active account"}, status_code=400)
+    stats = get_type_stats(acct["steamid64"])
+    return JSONResponse(stats)
+
+@app.post("/api/type-rename")
+async def api_type_rename(request: Request):
+    """Bulk rename all games of one type to another."""
+    try: data = await request.json()
+    except: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    old_type = data.get("old_type", "").strip().lower()
+    new_type = data.get("new_type", "").strip().lower()
+    if not old_type or not new_type or len(new_type) > 30:
+        return JSONResponse({"error": "Both old_type and new_type required (1-30 chars)"}, status_code=400)
+    if old_type == new_type:
+        return JSONResponse({"error": "Types are identical"}, status_code=400)
+    count = rename_type(old_type, new_type)
+    log.info(f"Type rename: {old_type} -> {new_type} ({count} games)")
+    return JSONResponse({"ok": True, "old_type": old_type, "new_type": new_type, "count": count})
     if "error" in result:
         return JSONResponse(result, status_code=400 if result["error"] == "No active account" else 500)
     return JSONResponse(result)

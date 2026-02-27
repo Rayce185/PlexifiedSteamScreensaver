@@ -300,6 +300,22 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-
 .toggle input:checked~.toggle-thumb{transform:translateX(16px)}
 
 /* SETTINGS TAB */
+
+.tm-table{width:100%;border-collapse:collapse;font-size:.82rem;margin-top:8px}
+.tm-table th{text-align:left;padding:6px 10px;border-bottom:2px solid var(--border);color:var(--text-dim);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em}
+.tm-table td{padding:6px 10px;border-bottom:1px solid var(--border)}
+.tm-type-row{cursor:pointer;transition:background .15s}
+.tm-type-row:hover{background:rgba(88,166,255,.06)}
+.tm-type-row td:first-child{font-weight:600}
+.tm-count{color:var(--text-dim);font-variant-numeric:tabular-nums}
+.tm-games{display:none;background:var(--bg)}
+.tm-games.open{display:table-row}
+.tm-games td{padding:4px 10px 4px 28px}
+.tm-game-list{max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.tm-game-item{display:flex;align-items:center;justify-content:space-between;padding:2px 6px;border-radius:4px;font-size:.78rem}
+.tm-game-item:hover{background:rgba(88,166,255,.08)}
+.tm-rename-input{background:var(--bg);color:var(--text);border:1px solid var(--accent);font-size:.78rem;padding:2px 6px;border-radius:4px;width:100px}
+.tm-actions{display:flex;gap:4px}
 .settings-tab{flex-direction:column;padding:20px;overflow-y:auto;width:100%}
 .setting-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(48,54,61,.5)}
 .setting-label{font-size:.85rem}
@@ -550,6 +566,11 @@ input[type=file]{display:none}
     <div class="setting-row"><div><div class="setting-label">Content types shown in screensaver</div><div class="setting-desc">Select which content types appear in the screensaver slideshow</div></div></div>
     <div class="ss-types" id="ss-types"></div>
     <div style="margin-top:8px"><button class="btn btn-accent btn-sm" onclick="saveSSTypes()">Save Types</button></div>
+
+    <div class="section-title" id="sec-typemanager" style="margin-top:28px">&#128736; Type Management</div>
+    <div class="setting-row"><div><div class="setting-desc">View and manage content type classifications. Rename types in bulk or correct individual games.</div></div></div>
+    <div style="margin-bottom:8px"><button class="btn btn-sm btn-accent" onclick="loadTypeManager()">&#128260; Load Type Overview</button><button class="btn btn-sm" onclick="repairTypes()" style="margin-left:8px" title="Re-fetch authoritative types from Steam catalog">&#128296; Auto-Repair from Steam</button></div>
+    <div id="type-manager"></div>
 
     <div class="section-title" id="sec-enrichment" style="margin-top:28px">&#128640; Steam Enrichment</div>
     <div class="enrich-panel">
@@ -1467,23 +1488,37 @@ window.openGamePanel = function(appid) {
   det += '<dt>Steam Deck</dt><dd>' + (_deckL[g.deck_verified || 0]) + '</dd>';
   document.getElementById('gp-details').innerHTML = det;
 
-  // Type selector options
-  const _allTypes = [...Object.keys(TYPE_LABELS), ...new Set(ALL.map(x=>x.type).filter(t=>t&&!TYPE_LABELS[t]))];
-  const _typeOpts = _allTypes.map(t=>'<option value="'+t+'">').join('');
   // Actions
   const isExcl = g.excluded || g.nsfw_auto;
   const toggleLabel = isExcl ? '\u2713 Include' : '\u2717 Exclude';
   const toggleClass = isExcl ? 'btn-green' : 'btn-red';
+  // Type dropdown: known types + any custom types already in library + "Custom..." option
+  const _curType = g.type || 'game';
+  const _extraTypes = [...new Set(ALL.map(x=>x.type).filter(t=>t&&!TYPE_LABELS[t]))];
+  let _selOpts = Object.entries(TYPE_LABELS).map(([k,v]) =>
+    '<option value="'+k+'"'+(k===_curType?' selected':'')+'>'+v+'</option>'
+  ).join('');
+  _extraTypes.forEach(t => {
+    _selOpts += '<option value="'+t+'"'+(t===_curType?' selected':'')+'>'+t+'</option>';
+  });
+  // If current type isn't in either list (custom that only this game has), add it
+  if(!TYPE_LABELS[_curType] && !_extraTypes.includes(_curType)){
+    _selOpts = '<option value="'+_curType+'" selected>'+_curType+'</option>' + _selOpts;
+  }
+  _selOpts += '<option value="__custom__">Custom...</option>';
   document.getElementById('gp-actions').innerHTML =
     '<button class="btn btn-sm ' + toggleClass + '" onclick="toggleGame(' + appid + ',' + (!isExcl) + ');refreshPanel()">' + toggleLabel + '</button>' +
     '<a class="btn btn-sm" href="' + g.store_url + '" target="_blank">Steam Store \u2197</a>' +
     '<span style="display:inline-flex;align-items:center;gap:4px">' +
     '<label style="font-size:.7rem;color:var(--text-dim)">Type:</label>' +
-    '<input list="gp-type-dl" value="'+(g.type||'game')+'" ' +
-    'onchange="setGameType('+appid+',this.value)" ' +
-    'style="background:var(--bg);color:var(--text);border:1px solid var(--border);font-size:.74rem;padding:2px 6px;border-radius:4px;width:100px" ' +
-    'title="Select or type a custom category">' +
-    '<datalist id="gp-type-dl">'+_typeOpts+'</datalist></span>';
+    '<select id="gp-type-sel" onchange="handleTypeSelect('+appid+',this)" ' +
+    'style="background:var(--bg);color:var(--text);border:1px solid var(--border);font-size:.74rem;padding:2px 6px;border-radius:4px;cursor:pointer">' +
+    _selOpts + '</select>' +
+    '<input id="gp-type-custom" type="text" placeholder="Enter type..." ' +
+    'style="display:none;background:var(--bg);color:var(--text);border:1px solid var(--border);font-size:.74rem;padding:2px 6px;border-radius:4px;width:90px" ' +
+    'onkeydown="if(event.key===\'Enter\')confirmCustomType('+appid+')">' +
+    '<button id="gp-type-ok" class="btn btn-sm" onclick="confirmCustomType('+appid+')" ' +
+    'style="display:none;padding:1px 6px;font-size:.7rem">\u2713</button></span>';
 
   // Open panel
   document.getElementById('game-panel').classList.add('open');
@@ -1502,6 +1537,24 @@ window.refreshPanel = function() {
   if (_panelAppid) openGamePanel(_panelAppid);
 };
 
+window.handleTypeSelect = function(appid, sel) {
+  if (sel.value === '__custom__') {
+    document.getElementById('gp-type-custom').style.display = '';
+    document.getElementById('gp-type-ok').style.display = '';
+    document.getElementById('gp-type-custom').focus();
+  } else {
+    document.getElementById('gp-type-custom').style.display = 'none';
+    document.getElementById('gp-type-ok').style.display = 'none';
+    setGameType(appid, sel.value);
+  }
+};
+
+window.confirmCustomType = function(appid) {
+  const inp = document.getElementById('gp-type-custom');
+  const val = inp.value.trim().toLowerCase();
+  if (val) setGameType(appid, val);
+};
+
 window.setGameType = async function(appid, newType) {
   try {
     const r = await fetch('/api/games/' + appid + '/type', {
@@ -1514,6 +1567,7 @@ window.setGameType = async function(appid, newType) {
       if (g) g.type = newType;
       toast('Type changed to ' + (TYPE_LABELS[newType] || newType));
       applyView();
+      refreshPanel();
     } else {
       const err = await r.json();
       toast('Failed: ' + (err.error || 'Unknown error'));
@@ -2493,6 +2547,106 @@ window.saveSSTypes=async function(){
   if(!checked.length){toast('Select at least one type');return}
   CONFIG.screensaver_types=checked;
   await saveConfig({screensaver_types:checked});
+};
+
+// === TYPE MANAGEMENT ===
+window.loadTypeManager=async function(){
+  const container=document.getElementById('type-manager');
+  container.innerHTML='<div style="color:var(--text-dim);font-size:.82rem">Loading...</div>';
+  try{
+    const r=await fetch('/api/type-stats');
+    if(!r.ok){container.innerHTML='<div style="color:var(--text-dim)">Failed to load</div>';return}
+    const stats=await r.json();
+    if(!stats.length){container.innerHTML='<div style="color:var(--text-dim)">No types found</div>';return}
+    let h='<table class="tm-table"><thead><tr><th>Type</th><th>Count</th><th>Actions</th></tr></thead><tbody>';
+    stats.forEach((s,i)=>{
+      const label=TYPE_LABELS[s.type]||s.type;
+      h+='<tr class="tm-type-row" onclick="toggleTypeGames('+i+')">';
+      h+='<td>'+esc(label)+'<span style="color:var(--text-faint);font-weight:400;margin-left:6px;font-size:.72rem">'+esc(s.type)+'</span></td>';
+      h+='<td class="tm-count">'+s.count+'</td>';
+      h+='<td class="tm-actions" onclick="event.stopPropagation()">';
+      h+='<button class="btn btn-sm" onclick="renameTypeStart('+i+',''+esc(s.type)+'')" style="padding:1px 6px;font-size:.7rem" title="Rename all '+s.count+' items">&#9998; Rename</button>';
+      h+='</td></tr>';
+      h+='<tr class="tm-games" id="tm-games-'+i+'"><td colspan="3">';
+      h+='<div id="tm-rename-'+i+'" style="display:none;margin-bottom:8px;display:none;align-items:center;gap:6px"></div>';
+      h+='<div class="tm-game-list">';
+      s.games.forEach(g=>{
+        h+='<div class="tm-game-item"><span>'+esc(g.name)+'</span>';
+        h+='<button class="btn btn-sm" onclick="openGamePanel('+g.appid+')" style="padding:0 5px;font-size:.68rem">Edit</button>';
+        h+='</div>';
+      });
+      h+='</div></td></tr>';
+    });
+    h+='</tbody></table>';
+    container.innerHTML=h;
+    window._tmStats=stats;
+  }catch(e){container.innerHTML='<div style="color:var(--text-dim)">Error: '+e.message+'</div>'}
+};
+
+window.toggleTypeGames=function(idx){
+  const row=document.getElementById('tm-games-'+idx);
+  if(row) row.classList.toggle('open');
+};
+
+window.renameTypeStart=function(idx,oldType){
+  const row=document.getElementById('tm-games-'+idx);
+  if(row) row.classList.add('open');
+  const container=document.getElementById('tm-rename-'+idx);
+  // Build dropdown + custom input
+  let opts=Object.entries(TYPE_LABELS).filter(([k])=>k!==oldType).map(([k,v])=>
+    '<option value="'+k+'">'+v+'</option>'
+  ).join('');
+  const extraTypes=[...new Set(ALL.map(x=>x.type).filter(t=>t&&t!==oldType&&!TYPE_LABELS[t]))];
+  extraTypes.forEach(t=>{opts+='<option value="'+t+'">'+t+'</option>'});
+  opts+='<option value="__custom__">Custom...</option>';
+  container.style.display='flex';
+  container.innerHTML=
+    '<span style="font-size:.78rem;color:var(--text-dim)">Rename <strong>'+esc(oldType)+'</strong> to:</span>'+
+    '<select id="tm-rename-sel-'+idx+'" onchange="tmRenameSelChange('+idx+')" style="background:var(--bg);color:var(--text);border:1px solid var(--border);font-size:.78rem;padding:2px 6px;border-radius:4px">'+
+    '<option value="">Select...</option>'+opts+'</select>'+
+    '<input id="tm-rename-inp-'+idx+'" type="text" class="tm-rename-input" placeholder="Custom type..." style="display:none">'+
+    '<button class="btn btn-sm btn-accent" onclick="renameTypeConfirm('+idx+',''+esc(oldType)+'')" style="padding:1px 8px;font-size:.72rem">Apply</button>'+
+    '<button class="btn btn-sm" onclick="document.getElementById('tm-rename-'+idx+'').style.display='none'" style="padding:1px 8px;font-size:.72rem">Cancel</button>';
+};
+
+window.tmRenameSelChange=function(idx){
+  const sel=document.getElementById('tm-rename-sel-'+idx);
+  const inp=document.getElementById('tm-rename-inp-'+idx);
+  inp.style.display=sel.value==='__custom__'?'':'none';
+  if(sel.value==='__custom__') inp.focus();
+};
+
+window.renameTypeConfirm=async function(idx,oldType){
+  const sel=document.getElementById('tm-rename-sel-'+idx);
+  let newType=sel.value;
+  if(newType==='__custom__'){
+    newType=document.getElementById('tm-rename-inp-'+idx).value.trim().toLowerCase();
+  }
+  if(!newType||newType==='__custom__'){toast('Select a target type');return}
+  try{
+    const r=await fetch('/api/type-rename',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({old_type:oldType,new_type:newType})
+    });
+    const d=await r.json();
+    if(d.ok){
+      toast('Renamed '+d.count+' items: '+oldType+' \u2192 '+newType);
+      await refreshGames();
+      loadTypeManager();
+    }else{toast(d.error||'Failed')}
+  }catch(e){toast('Rename failed')}
+};
+
+window.repairTypes=async function(){
+  toast('Running type repair from Steam catalog...');
+  try{
+    const r=await fetch('/api/repair-types',{method:'POST'});
+    const d=await r.json();
+    if(d.error){toast(d.error);return}
+    toast('Repaired '+d.corrected+' types');
+    await refreshGames();
+    loadTypeManager();
+  }catch(e){toast('Repair failed')}
 };
 
 // === ENRICHMENT ===

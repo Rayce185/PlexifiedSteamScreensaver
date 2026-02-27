@@ -7,84 +7,230 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--text-dim:#8b949e;
-      --accent:#58a6ff;--green:#3fb950;--red:#f85149}
+      --accent:#58a6ff;--green:#3fb950;--red:#f85149;--yellow:#d29922}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-     display:flex;align-items:center;justify-content:center;min-height:100vh}
+     display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px}
 .setup-box{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:40px;
-           width:100%;max-width:460px}
+           width:100%;max-width:520px}
 h1{font-size:1.4rem;margin-bottom:4px;text-align:center}
 .sub{font-size:.8rem;color:var(--text-dim);margin-bottom:24px;text-align:center}
-.section{margin-bottom:20px}
+.logo{font-size:2.4rem;text-align:center;margin-bottom:8px}
+
+.step{display:none;animation:fadeIn .3s ease}
+.step.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+.step-indicator{display:flex;gap:8px;justify-content:center;margin-bottom:24px}
+.step-dot{width:10px;height:10px;border-radius:50%;background:var(--border);transition:background .3s}
+.step-dot.done{background:var(--green)}
+.step-dot.current{background:var(--accent)}
+
 .section-title{font-size:.9rem;font-weight:600;margin-bottom:10px}
+.desc{font-size:.8rem;color:var(--text-dim);margin-bottom:14px;line-height:1.5}
 .detected{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 14px;margin:6px 0;font-size:.8rem}
 .detected .name{font-weight:600}
 .detected .id{font-size:.7rem;color:var(--text-dim);font-family:monospace}
+
+.input-group{margin-bottom:12px}
+.input-group label{display:block;font-size:.8rem;font-weight:600;margin-bottom:6px}
+.input-group input{width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);
+    border-radius:6px;color:var(--text);font-size:.85rem;font-family:monospace}
+.input-group input:focus{outline:none;border-color:var(--accent)}
+.input-group .hint{font-size:.72rem;color:var(--text-dim);margin-top:4px}
+.input-group .hint a{color:var(--accent);text-decoration:none}
+.input-group .hint a:hover{text-decoration:underline}
+
 .btn{padding:10px 20px;border:none;border-radius:6px;font-size:.85rem;font-weight:600;cursor:pointer;transition:opacity .15s}
 .btn:hover{opacity:.85}
+.btn:disabled{opacity:.4;cursor:not-allowed}
 .btn-accent{background:var(--accent);color:#fff}
+.btn-green{background:var(--green);color:#fff}
 .btn-dim{background:rgba(255,255,255,.06);color:var(--text-dim)}
+.btn-row{display:flex;gap:8px;margin-top:16px;justify-content:flex-end}
+
 .status{font-size:.78rem;margin-top:8px;min-height:1.4em}
 .status.ok{color:var(--green)}
 .status.err{color:var(--red)}
 .status.info{color:var(--text-dim)}
-.logo{font-size:2.4rem;text-align:center;margin-bottom:8px}
-.info{font-size:.72rem;color:var(--text-dim);line-height:1.5;margin-top:16px}
-.btn-row{display:flex;gap:8px;margin-top:16px}
+.status.warn{color:var(--yellow)}
+
+.check{color:var(--green);margin-right:4px}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);
+         border-radius:50%;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
 <div class="setup-box">
   <div class="logo">🎮</div>
   <h1>PSS Setup</h1>
-  <div class="sub">No Steam accounts detected yet</div>
+  <div class="sub">Let's get your Steam screensaver running</div>
 
-  <div class="section">
-    <div class="section-title">Steam Account Detection</div>
-    <p style="font-size:.8rem;color:var(--text-dim);margin-bottom:12px">
-      PSS reads your Steam installation to find logged-in accounts. Make sure Steam has been
-      opened and logged into at least once on this machine.
-    </p>
+  <div class="step-indicator">
+    <div class="step-dot current" id="dot-1"></div>
+    <div class="step-dot" id="dot-2"></div>
+    <div class="step-dot" id="dot-3"></div>
+  </div>
+
+  <!-- STEP 1: Account Detection -->
+  <div class="step active" id="step-1">
+    <div class="section-title">Step 1 — Detect Steam Accounts</div>
+    <div class="desc">
+      PSS reads your Steam installation to find logged-in accounts.
+      Make sure Steam has been opened at least once on this machine.
+    </div>
     <div id="accounts-area">
-      <div class="status info">Click detect to scan for accounts...</div>
+      <div class="status info"><span class="spinner"></span>Scanning for Steam accounts...</div>
+    </div>
+    <div class="status" id="status-1"></div>
+    <div class="btn-row">
+      <button class="btn btn-dim" onclick="detect()">🔍 Re-scan</button>
+      <button class="btn btn-accent" id="btn-next-1" onclick="goStep(2)" disabled>Next →</button>
+    </div>
+  </div>
+
+  <!-- STEP 2: API Key -->
+  <div class="step" id="step-2">
+    <div class="section-title">Step 2 — Steam API Key</div>
+    <div class="desc">
+      PSS needs a Steam Web API Key to fetch your game library.
+      It takes 30 seconds to get one — click the link below.
+    </div>
+    <div class="input-group">
+      <label>Steam Web API Key</label>
+      <input type="text" id="api-key" placeholder="Paste your key here..." autocomplete="off" spellcheck="false">
+      <div class="hint">
+        Get yours at <a href="https://steamcommunity.com/dev/apikey" target="_blank">steamcommunity.com/dev/apikey</a>
+        — log in, enter "localhost" as domain, copy the key.
+      </div>
+    </div>
+    <div class="status" id="status-2"></div>
+    <div class="btn-row">
+      <button class="btn btn-dim" onclick="goStep(1)">← Back</button>
+      <button class="btn btn-accent" id="btn-save-key" onclick="saveKey()">Save & Continue →</button>
+    </div>
+  </div>
+
+  <!-- STEP 3: Done -->
+  <div class="step" id="step-3">
+    <div class="section-title">Step 3 — Ready!</div>
+    <div class="desc" id="summary"></div>
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:14px;margin:16px 0;font-size:.8rem;line-height:1.6">
+      <strong>What happens next:</strong><br>
+      <span class="check">✓</span> Sign in with Steam to access the Customizer<br>
+      <span class="check">✓</span> Your game library will load automatically<br>
+      <span class="check">✓</span> Run enrichment in Settings for full metadata<br>
     </div>
     <div class="btn-row">
-      <button class="btn btn-accent" onclick="detect()">🔍 Detect Steam Accounts</button>
+      <button class="btn btn-dim" onclick="goStep(2)">← Back</button>
+      <button class="btn btn-green" onclick="window.location.href='/login'" style="font-size:.95rem;padding:12px 28px">
+        🚀 Sign In with Steam
+      </button>
     </div>
-    <div class="status" id="status"></div>
-  </div>
-
-  <div class="info">
-    <strong>How it works:</strong> PSS finds accounts from Steam's <code>loginusers.vdf</code> file.
-    Once detected, you'll sign in via Steam to access the customizer. The screensaver itself
-    is always accessible without login.
   </div>
 </div>
+
 <script>
+let accounts = [];
+let activeAccount = null;
+
+function goStep(n) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById('step-' + n).classList.add('active');
+  document.querySelectorAll('.step-dot').forEach((d, i) => {
+    d.className = 'step-dot' + (i < n - 1 ? ' done' : i === n - 1 ? ' current' : '');
+  });
+}
+
 async function detect() {
-  const st = document.getElementById('status');
   const area = document.getElementById('accounts-area');
-  st.className = 'status info'; st.textContent = 'Scanning...';
+  const st = document.getElementById('status-1');
+  const btn = document.getElementById('btn-next-1');
+  area.innerHTML = '<div class="status info"><span class="spinner"></span>Scanning...</div>';
+  st.textContent = '';
+  btn.disabled = true;
+
   try {
     const r = await fetch('/api/accounts/detect');
     const data = await r.json();
-    const accts = data.accounts || [];
-    if (!accts.length) {
-      area.innerHTML = '<div class="status err">No accounts found. Is Steam installed and has it been logged into?</div>';
-      st.className = 'status err'; st.textContent = 'Check your Steam installation path.';
+    accounts = data.accounts || [];
+    if (!accounts.length) {
+      area.innerHTML = '<div class="status err">No accounts found. Is Steam installed?</div>';
+      st.className = 'status err';
+      st.textContent = 'Make sure Steam has been launched and logged into at least once.';
       return;
     }
-    area.innerHTML = accts.map(a =>
-      '<div class="detected"><div class="name">' + (a.persona_name || 'Unknown') +
-      (a.is_active ? ' <span style="color:var(--green)">● active</span>' : '') +
-      '</div><div class="id">' + a.steamid64 + '</div></div>'
+    activeAccount = accounts.find(a => a.is_active) || accounts[0];
+    area.innerHTML = accounts.map(a =>
+      '<div class="detected"><span class="check">✓</span> <span class="name">' +
+      (a.persona_name || 'Unknown') +
+      (a.is_active ? ' <span style="color:var(--green);font-size:.7rem">● active</span>' : '') +
+      '</span><br><span class="id">' + a.steamid64 + '</span></div>'
     ).join('');
     st.className = 'status ok';
-    st.textContent = accts.length + ' account(s) found! Redirecting to login...';
-    setTimeout(() => { window.location.href = '/login'; }, 1500);
+    st.textContent = accounts.length + ' account(s) found!';
+    btn.disabled = false;
+
+    // Check if API key already exists (e.g. from .env)
+    const cfgR = await fetch('/api/config');
+    if (cfgR.ok) {
+      const cfg = await cfgR.json();
+      // Check per-account keys
+      const hasKey = accounts.some(a => a.has_api_key);
+      if (hasKey) {
+        st.textContent += ' API key already configured — you can skip to Step 3.';
+      }
+    }
   } catch(e) {
-    st.className = 'status err'; st.textContent = 'Detection failed: ' + e.message;
+    area.innerHTML = '<div class="status err">Detection failed: ' + e.message + '</div>';
   }
 }
+
+async function saveKey() {
+  const key = document.getElementById('api-key').value.trim();
+  const st = document.getElementById('status-2');
+  if (!key) {
+    st.className = 'status err';
+    st.textContent = 'Please enter your Steam API key.';
+    return;
+  }
+  if (key.length < 20) {
+    st.className = 'status warn';
+    st.textContent = 'That looks too short for a Steam API key. Double-check it.';
+    return;
+  }
+  st.className = 'status info';
+  st.textContent = 'Saving and verifying...';
+
+  try {
+    // Save to active account
+    const steamid = activeAccount.steamid64;
+    const r = await fetch('/api/accounts/' + steamid + '/api-key', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({api_key: key})
+    });
+    if (!r.ok) {
+      const err = await r.json();
+      st.className = 'status err';
+      st.textContent = 'Save failed: ' + (err.error || err.detail || 'Unknown error');
+      return;
+    }
+    st.className = 'status ok';
+    st.textContent = 'API key saved for ' + activeAccount.persona_name + '!';
+    document.getElementById('summary').innerHTML =
+      '<span class="check">✓</span> <strong>' + accounts.length + '</strong> Steam account(s) detected<br>' +
+      '<span class="check">✓</span> API key saved for <strong>' + activeAccount.persona_name + '</strong><br>' +
+      'Your game library will load automatically after signing in.';
+    setTimeout(() => goStep(3), 1000);
+  } catch(e) {
+    st.className = 'status err';
+    st.textContent = 'Error: ' + e.message;
+  }
+}
+
+// Auto-detect on page load
+detect();
 </script>
 </body>
 </html>

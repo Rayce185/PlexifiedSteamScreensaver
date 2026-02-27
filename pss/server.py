@@ -352,6 +352,15 @@ def get_api_key_for(steamid64: str) -> str:
         return per_account
     return STEAM_API_KEY  # global default from .env
 
+def has_any_api_key() -> bool:
+    """Check if any account has an API key or global key is set."""
+    if STEAM_API_KEY:
+        return True
+    for acct in get_all_accounts():
+        if get_account_config(acct["steamid64"], "steam_api_key"):
+            return True
+    return False
+
 
 def process_games(raw_games):
     EXPLICIT_DESCRIPTORS = {3}
@@ -1225,14 +1234,18 @@ async def auth_middleware(request: Request, call_next):
         return await call_next(request)
     if path.startswith("/api/image/") and request.method == "GET":
         return await call_next(request)
-    # No accounts in DB = first run, setup page is open
-    if not has_accounts():
-        if path == "/setup" or path.startswith("/api/accounts"):
+    # First run: no accounts OR no API key configured
+    needs_setup = not has_accounts() or not has_any_api_key()
+    if needs_setup:
+        setup_paths = ("/setup", "/api/accounts", "/api/config")
+        if any(path.startswith(p) for p in setup_paths):
             return await call_next(request)
         if path.startswith("/api/"):
             return JSONResponse({"error": "Setup required", "redirect": "/setup"}, status_code=403)
-        return RedirectResponse(url="/setup")
-    # Setup page locks after accounts exist
+        if path != "/setup":
+            return RedirectResponse(url="/setup")
+        return await call_next(request)
+    # Setup page locks after setup complete
     if path == "/setup":
         return RedirectResponse(url="/login")
     # Login page: accessible without session, skip if already authed

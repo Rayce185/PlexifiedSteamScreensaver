@@ -1295,7 +1295,7 @@ async def login_page(request: Request):
 
 @app.get("/setup", response_class=HTMLResponse)
 async def setup_page():
-    if has_accounts():
+    if has_accounts() and has_any_api_key():
         return RedirectResponse(url="/login")
     p = WEB_DIR / "setup.html"
     if not p.exists(): return HTMLResponse("<h1>Setup page not found</h1>", status_code=500)

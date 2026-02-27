@@ -1321,10 +1321,57 @@ async def setup_page():
 
 # === GAMES API ===
 
+def _parse_steamspy_owners(s):
+    """Parse '20,000 .. 50,000' style owner strings to int."""
+    if not s:
+        return 0
+    import re
+    m = re.search(r'([\d,]+)', s)
+    return int(m.group(1).replace(',', '')) if m else 0
+
+def _is_shovelware(g, cfg):
+    """Server-side shovelware detection — mirrors customizer logic exactly."""
+    avg_pt = g.get("steamspy_avg_playtime")
+    if avg_pt is None:
+        return False  # no steamspy data, can't judge
+    require_unplayed = cfg.get("shovelware_require_unplayed", True)
+    if require_unplayed and (g.get("playtime_hours") or 0) > 0:
+        return False  # user played it, never flag
+    signals = 0
+    if cfg.get("shovelware_enable_avg_playtime", True):
+        if avg_pt is not None and avg_pt < cfg.get("shovelware_avg_playtime_threshold", 30):
+            signals += 1
+    total_reviews = (g.get("steamspy_positive") or 0) + (g.get("steamspy_negative") or 0)
+    if cfg.get("shovelware_enable_reviews", True):
+        if g.get("steamspy_positive") is not None and total_reviews < cfg.get("shovelware_reviews_threshold", 100):
+            signals += 1
+    if cfg.get("shovelware_enable_ratio", True):
+        if total_reviews > 0:
+            ratio = round((g.get("steamspy_positive") or 0) / total_reviews * 100)
+            if ratio < cfg.get("shovelware_review_ratio_threshold", 60):
+                signals += 1
+    if cfg.get("shovelware_enable_owners", True):
+        owners = _parse_steamspy_owners(g.get("steamspy_owners"))
+        if g.get("steamspy_owners") and owners < cfg.get("shovelware_owners_threshold", 50000):
+            signals += 1
+    if cfg.get("shovelware_enable_user_playtime", True):
+        if not g.get("playtime_hours") or g.get("playtime_hours") == 0:
+            signals += 1
+    if cfg.get("shovelware_enable_metacritic", True):
+        if not g.get("metacritic_score"):
+            signals += 1
+    return signals >= cfg.get("shovelware_min_signals", 3)
+
 @app.get("/api/games")
 async def api_games():
     acct = get_active_account()
-    return JSONResponse(get_games(acct["steamid64"]) if acct else [])
+    if not acct:
+        return JSONResponse([])
+    games = get_games(acct["steamid64"])
+    cfg = get_full_config()
+    for g in games:
+        g["is_shovelware"] = _is_shovelware(g, cfg)
+    return JSONResponse(games)
 
 @app.get("/api/excluded")
 async def api_excluded_get():

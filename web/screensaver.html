@@ -205,23 +205,6 @@
   }
 
 
-  // === SHOVELWARE DETECTION (mirrors customizer logic) ===
-  function parseSteamSpyOwners(s){if(!s)return 0;const m=s.match(/(\d[\d,]*)/);return m?parseInt(m[1].replace(/,/g,'')):0}
-  function getShovelwareSignals(g){
-    const cfg=CONFIG;
-    if((cfg.shovelware_require_unplayed!==false)&&g.playtime_hours>0)return 0;
-    let s=0;
-    if(cfg.shovelware_enable_avg_playtime!==false&&g.steamspy_avg_playtime!=null&&g.steamspy_avg_playtime<(cfg.shovelware_avg_playtime_threshold||30))s++;
-    const tr=(g.steamspy_positive||0)+(g.steamspy_negative||0);
-    if(cfg.shovelware_enable_reviews!==false&&g.steamspy_positive!=null&&tr<(cfg.shovelware_reviews_threshold||100))s++;
-    if(cfg.shovelware_enable_ratio!==false&&tr>0&&Math.round((g.steamspy_positive||0)/tr*100)<(cfg.shovelware_review_ratio_threshold||60))s++;
-    if(cfg.shovelware_enable_owners!==false&&g.steamspy_owners&&parseSteamSpyOwners(g.steamspy_owners)<(cfg.shovelware_owners_threshold||50000))s++;
-    if(cfg.shovelware_enable_user_playtime!==false&&(!g.playtime_hours||g.playtime_hours===0))s++;
-    if(cfg.shovelware_enable_metacritic!==false&&!g.metacritic_score)s++;
-    return s;
-  }
-  function isShovelware(g){if(!g.steamspy_avg_playtime&&g.steamspy_avg_playtime!==0)return false;return getShovelwareSignals(g)>=(CONFIG.shovelware_min_signals||3)}
-
   async function init() {
     try {
       const cr=await fetch('/api/config'); if(cr.ok) CONFIG={...CONFIG,...(await cr.json())};
@@ -242,13 +225,13 @@
             const previewIds=new Set(JSON.parse(stored));
             eligible=all.filter(g=>previewIds.has(g.appid));
           }else{
-            eligible=all.filter(g=>!g.excluded&&!g.nsfw_auto&&!isShovelware(g)&&ssTypes.includes(g.type||'game'));
+            eligible=all.filter(g=>!g.excluded&&!g.nsfw_auto&&!g.is_shovelware&&ssTypes.includes(g.type||'game'));
           }
         }catch(e){
-          eligible=all.filter(g=>!g.excluded&&!g.nsfw_auto&&!isShovelware(g)&&ssTypes.includes(g.type||'game'));
+          eligible=all.filter(g=>!g.excluded&&!g.nsfw_auto&&!g.is_shovelware&&ssTypes.includes(g.type||'game'));
         }
       }else{
-        eligible=all.filter(g=>!g.excluded&&!g.nsfw_auto&&!isShovelware(g)&&ssTypes.includes(g.type||'game'));
+        eligible=all.filter(g=>!g.excluded&&!g.nsfw_auto&&!g.is_shovelware&&ssTypes.includes(g.type||'game'));
       }
       for(let i=eligible.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[eligible[i],eligible[j]]=[eligible[j],eligible[i]]}
       games=eligible;

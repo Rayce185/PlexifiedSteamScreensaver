@@ -1280,6 +1280,18 @@ async def auth_middleware(request: Request, call_next):
 async def root():
     return RedirectResponse(url="/customizer")
 
+@app.get("/favicon.png")
+async def favicon_png():
+    p = WEB_DIR / "favicon.png"
+    if not p.exists(): return JSONResponse({}, status_code=404)
+    return FileResponse(str(p), media_type="image/png")
+
+@app.get("/favicon.ico")
+async def favicon_ico():
+    p = WEB_DIR / "favicon.ico"
+    if not p.exists(): return JSONResponse({}, status_code=404)
+    return FileResponse(str(p), media_type="image/x-icon")
+
 @app.get("/screensaver", response_class=HTMLResponse)
 async def screensaver():
     p = WEB_DIR / "screensaver.html"

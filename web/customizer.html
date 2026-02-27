@@ -2266,9 +2266,7 @@ function loadSettings(){
   document.getElementById('sw-en-owners').checked=CONFIG.shovelware_enable_owners!==false;
   document.getElementById('sw-en-userpt').checked=CONFIG.shovelware_enable_user_playtime!==false;
   document.getElementById('sw-en-meta').checked=CONFIG.shovelware_enable_metacritic!==false;
-}
-
-// Load SGDB key
+  // SGDB key
   if(CONFIG.sgdb_api_key) document.getElementById('sgdb-key').value = CONFIG.sgdb_api_key;
   // Image mode
   const im=CONFIG.image_mode||'selected';
@@ -2277,6 +2275,7 @@ function loadSettings(){
   initLogLevel();
   loadCacheSize();
   document.getElementById('cfg-shuffle-max-mb').value = CONFIG.shuffle_cache_max_mb || 2048;
+}
 
 window.saveSettings=async function(){
   const u={

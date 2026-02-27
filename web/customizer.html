@@ -497,7 +497,7 @@ input[type=file]{display:none}
     <div class="display-split">
       <div class="display-controls" id="display-list"></div>
       <div class="display-preview" id="display-preview"><div class="dp-resize" id="dp-resize"></div>
-        <div class="display-preview-label"><span>&#128064; Preview</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm" id="wy-edit-btn" onclick="enterLayoutEdit()" style="padding:1px 8px;font-size:.7rem">&#9998; Edit Layout</button><button class="btn btn-sm btn-accent" id="wy-save-btn" onclick="exitLayoutEdit(true)" style="padding:1px 8px;font-size:.7rem;display:none">&#10003; Save</button><button class="btn btn-sm" id="wy-cancel-btn" onclick="exitLayoutEdit(false)" style="padding:1px 8px;font-size:.7rem;display:none">&#10005; Cancel</button><button class="btn btn-sm" onclick="prevPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9664;</button><span id="dp-game-counter" style="font-size:.68rem;line-height:24px;min-width:40px;text-align:center"></span><button class="btn btn-sm" onclick="nextPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9654;</button></span></div>
+        <div class="display-preview-label"><span>&#128064; Preview</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm" id="wy-edit-btn" onclick="enterLayoutEdit()" style="padding:1px 8px;font-size:.7rem">&#9998; Edit Layout</button><button class="btn btn-sm btn-accent" id="wy-save-btn" onclick="exitLayoutEdit(true)" style="padding:1px 8px;font-size:.7rem;display:none">&#10003; Save</button><button class="btn btn-sm" id="wy-cancel-btn" onclick="exitLayoutEdit(false)" style="padding:1px 8px;font-size:.7rem;display:none">&#10005; Cancel</button><button class="btn btn-sm" onclick="prevPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9664;</button><span id="dp-game-counter" style="font-size:.68rem;line-height:24px;min-width:40px;text-align:center"></span><button class="btn btn-sm" onclick="nextPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9654;</button><button class="btn btn-sm" onclick="shufflePreviewGame()" style="padding:1px 8px;font-size:.7rem" title="Random game">&#127922;</button></span></div>
         <div class="dp-scene" id="dp-scene">
           <img class="dp-bg" id="dp-bg" src="" alt="">
           <div class="dp-vignette"></div>
@@ -1262,7 +1262,7 @@ window.fpTri=function(group,val){
     'fp-nsfw':'nsfw','fp-shovelware':'shovelware','fp-enriched':'enriched','fp-vr':'vr','fp-free':'free'
   };
   const key=map[group];
-  if(key){filters[key]=val; buildFilterPanel(); renderQuickChips()}
+  if(key){filters[key]=val; buildFilterPanel(); renderQuickChips(); applyView()}
 };
 
 window.fpTypeAll=function(selectAll){
@@ -1490,6 +1490,25 @@ window.closeGamePanel = function() {
 
 window.refreshPanel = function() {
   if (_panelAppid) openGamePanel(_panelAppid);
+};
+
+window.setGameType = async function(appid, newType) {
+  try {
+    const r = await fetch('/api/games/' + appid + '/type', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type: newType})
+    });
+    if (r.ok) {
+      const g = ALL.find(x => x.appid === appid);
+      if (g) g.type = newType;
+      toast('Type changed to ' + (TYPE_LABELS[newType] || newType));
+      applyView();
+    } else {
+      const err = await r.json();
+      toast('Failed: ' + (err.error || 'Unknown error'));
+    }
+  } catch(e) { toast('Type change failed'); }
 };
 
 // === PANEL RESIZE ===
@@ -1953,6 +1972,14 @@ window.prevPreviewGame = function(){
 window.nextPreviewGame = function(){
   if(!_dpGames.length) return;
   _dpIdx = (_dpIdx + 1) % _dpGames.length;
+  renderDisplayPreview();
+};
+
+window.shufflePreviewGame = function(){
+  if(_dpGames.length < 2) return;
+  let r;
+  do { r = Math.floor(Math.random() * _dpGames.length); } while(r === _dpIdx);
+  _dpIdx = r;
   renderDisplayPreview();
 };
 

@@ -37,26 +37,29 @@ os.chdir(APP_DIR)
 (APP_DIR / "logs").mkdir(exist_ok=True)
 
 # ── Logging ──
-# In bundled mode, stderr goes nowhere. Redirect everything to a log file.
+# In bundled mode (console=False), sys.stdout and sys.stderr are None.
+# This crashes any logging StreamHandler AND uvicorn's isatty() check.
+# Fix: redirect both to a real file BEFORE anything else touches them.
 import logging
 import traceback
 from datetime import datetime
 
 _log_ts = datetime.now().strftime("%y%m%d_%H%M%S")
 _tray_log_path = APP_DIR / "logs" / f"pss_tray_{_log_ts}.log"
+
+if IS_BUNDLED:
+    _stderr_file = open(APP_DIR / "logs" / f"pss_stderr_{_log_ts}.log", "w")
+    if sys.stdout is None:
+        sys.stdout = _stderr_file
+    if sys.stderr is None:
+        sys.stderr = _stderr_file
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler(_tray_log_path),
-        logging.StreamHandler(),  # Also stdout if console exists
-    ]
+    handlers=[logging.FileHandler(_tray_log_path)],
 )
 tray_log = logging.getLogger("pss.tray")
-
-if IS_BUNDLED:
-    # Redirect stderr to log file so unhandled exceptions are captured
-    sys.stderr = open(APP_DIR / "logs" / f"pss_stderr_{_log_ts}.log", "w")
 
 tray_log.info(f"PSS Tray starting (bundled={IS_BUNDLED})")
 tray_log.info(f"APP_DIR={APP_DIR}")
@@ -163,7 +166,8 @@ class PSSServer:
                 tray_log.info(f"Starting uvicorn on port {PORT}...")
                 config = uvicorn.Config(
                     app, host="0.0.0.0", port=PORT,
-                    log_level="info", access_log=False
+                    log_level="info", access_log=False,
+                    log_config=None,
                 )
                 self._uvicorn_server = uvicorn.Server(config)
                 self._uvicorn_server.run()

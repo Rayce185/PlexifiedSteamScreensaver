@@ -497,7 +497,7 @@ input[type=file]{display:none}
     <div class="display-split">
       <div class="display-controls" id="display-list"></div>
       <div class="display-preview" id="display-preview"><div class="dp-resize" id="dp-resize"></div>
-        <div class="display-preview-label"><span>&#128064; Preview</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm" id="wy-edit-btn" onclick="enterLayoutEdit()" style="padding:1px 8px;font-size:.7rem">&#9998; Edit Layout</button><button class="btn btn-sm btn-accent" id="wy-save-btn" onclick="exitLayoutEdit(true)" style="padding:1px 8px;font-size:.7rem;display:none">&#10003; Save</button><button class="btn btn-sm" id="wy-cancel-btn" onclick="exitLayoutEdit(false)" style="padding:1px 8px;font-size:.7rem;display:none">&#10005; Cancel</button><button class="btn btn-sm" onclick="prevPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9664;</button><span id="dp-game-counter" style="font-size:.68rem;line-height:24px;min-width:40px;text-align:center"></span><button class="btn btn-sm" onclick="nextPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9654;</button><button class="btn btn-sm" onclick="shufflePreviewGame()" style="padding:1px 8px;font-size:.7rem" title="Random game">&#127922;</button></span></div>
+        <div class="display-preview-label"><span>&#128064; Preview</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm" id="wy-edit-btn" onclick="enterLayoutEdit()" style="padding:1px 8px;font-size:.7rem">&#9998; Edit Layout</button><button class="btn btn-sm btn-accent" id="wy-save-btn" onclick="exitLayoutEdit(true)" style="padding:1px 8px;font-size:.7rem;display:none">&#10003; Save</button><button class="btn btn-sm" id="wy-cancel-btn" onclick="exitLayoutEdit(false)" style="padding:1px 8px;font-size:.7rem;display:none">&#10005; Cancel</button><button class="btn btn-sm" onclick="prevPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9664;</button><span id="dp-game-counter" style="font-size:.68rem;line-height:24px;min-width:40px;text-align:center"></span><button class="btn btn-sm" onclick="nextPreviewGame()" style="padding:1px 8px;font-size:.7rem">&#9654;</button><button class="btn btn-sm" onclick="shufflePreviewGame()" style="padding:1px 8px;font-size:.7rem" title="Random game">&#127922;</button><input id="dp-game-search" type="text" list="dp-game-list" placeholder="Jump to game..." onchange="jumpToPreviewGame(this.value);this.value=''" style="background:var(--bg);color:var(--text);border:1px solid var(--border);font-size:.68rem;padding:1px 6px;border-radius:4px;width:130px"><datalist id="dp-game-list"></datalist></span></div>
         <div class="dp-scene" id="dp-scene">
           <img class="dp-bg" id="dp-bg" src="" alt="">
           <div class="dp-vignette"></div>
@@ -1467,13 +1467,23 @@ window.openGamePanel = function(appid) {
   det += '<dt>Steam Deck</dt><dd>' + (_deckL[g.deck_verified || 0]) + '</dd>';
   document.getElementById('gp-details').innerHTML = det;
 
+  // Type selector options
+  const _allTypes = [...Object.keys(TYPE_LABELS), ...new Set(ALL.map(x=>x.type).filter(t=>t&&!TYPE_LABELS[t]))];
+  const _typeOpts = _allTypes.map(t=>'<option value="'+t+'">').join('');
   // Actions
   const isExcl = g.excluded || g.nsfw_auto;
   const toggleLabel = isExcl ? '\u2713 Include' : '\u2717 Exclude';
   const toggleClass = isExcl ? 'btn-green' : 'btn-red';
   document.getElementById('gp-actions').innerHTML =
     '<button class="btn btn-sm ' + toggleClass + '" onclick="toggleGame(' + appid + ',' + (!isExcl) + ');refreshPanel()">' + toggleLabel + '</button>' +
-    '<a class="btn btn-sm" href="' + g.store_url + '" target="_blank">Steam Store \u2197</a>';
+    '<a class="btn btn-sm" href="' + g.store_url + '" target="_blank">Steam Store \u2197</a>' +
+    '<span style="display:inline-flex;align-items:center;gap:4px">' +
+    '<label style="font-size:.7rem;color:var(--text-dim)">Type:</label>' +
+    '<input list="gp-type-dl" value="'+(g.type||'game')+'" ' +
+    'onchange="setGameType('+appid+',this.value)" ' +
+    'style="background:var(--bg);color:var(--text);border:1px solid var(--border);font-size:.74rem;padding:2px 6px;border-radius:4px;width:100px" ' +
+    'title="Select or type a custom category">' +
+    '<datalist id="gp-type-dl">'+_typeOpts+'</datalist></span>';
 
   // Open panel
   document.getElementById('game-panel').classList.add('open');
@@ -1983,6 +1993,12 @@ window.shufflePreviewGame = function(){
   renderDisplayPreview();
 };
 
+window.jumpToPreviewGame = function(name){
+  if(!name || !_dpGames.length) return;
+  const idx = _dpGames.findIndex(g => g.name === name);
+  if(idx >= 0) { _dpIdx = idx; renderDisplayPreview(); }
+};
+
 function renderDisplayPreview(){
   const container=document.getElementById('dp-rows');
   if(!container) return;
@@ -1994,9 +2010,13 @@ function renderDisplayPreview(){
   if(_dpIdx >= _dpGames.length) _dpIdx = 0;
   const g = _dpGames[_dpIdx];
 
-  // Update counter
+  // Update counter + game search datalist
   const counter = document.getElementById('dp-game-counter');
   if(counter) counter.textContent = (_dpIdx+1)+'/'+_dpGames.length;
+  const dl = document.getElementById('dp-game-list');
+  if(dl && !dl.childElementCount) {
+    dl.innerHTML = _dpGames.map(g => '<option value="' + g.name.replace(/"/g,'&quot;') + '">').join('');
+  }
 
   // Set background image from the SAME game
   const bg=document.getElementById('dp-bg');

@@ -2249,9 +2249,8 @@ async def api_set_game_type(appid: int, request: Request):
     try: data = await request.json()
     except: return JSONResponse({"error": "Invalid JSON"}, status_code=400)
     new_type = data.get("type", "").strip().lower()
-    valid_types = {"game","dlc","music","demo","mod","video","advertising","tool","software","episode","series","hardware","config","beta"}
-    if new_type not in valid_types:
-        return JSONResponse({"error": f"Invalid type: {new_type}"}, status_code=400)
+    if not new_type or len(new_type) > 30:
+        return JSONResponse({"error": "Type must be 1-30 characters"}, status_code=400)
     update_app_type(appid, new_type)
     log.info(f"Type override: appid {appid} -> {new_type}")
     return JSONResponse({"ok": True, "appid": appid, "type": new_type})

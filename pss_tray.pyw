@@ -36,6 +36,33 @@ os.chdir(APP_DIR)
 (APP_DIR / "data").mkdir(exist_ok=True)
 (APP_DIR / "logs").mkdir(exist_ok=True)
 
+# ── Logging ──
+# In bundled mode, stderr goes nowhere. Redirect everything to a log file.
+import logging
+import traceback
+from datetime import datetime
+
+_log_ts = datetime.now().strftime("%y%m%d_%H%M%S")
+_tray_log_path = APP_DIR / "logs" / f"pss_tray_{_log_ts}.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler(_tray_log_path),
+        logging.StreamHandler(),  # Also stdout if console exists
+    ]
+)
+tray_log = logging.getLogger("pss.tray")
+
+if IS_BUNDLED:
+    # Redirect stderr to log file so unhandled exceptions are captured
+    sys.stderr = open(APP_DIR / "logs" / f"pss_stderr_{_log_ts}.log", "w")
+
+tray_log.info(f"PSS Tray starting (bundled={IS_BUNDLED})")
+tray_log.info(f"APP_DIR={APP_DIR}")
+if IS_BUNDLED:
+    tray_log.info(f"BUNDLE_DIR={BUNDLE_DIR}")
+
 # Load .env if present (optional — setup.html handles key entry for exe users)
 env_file = APP_DIR / ".env"
 if env_file.exists():
@@ -50,13 +77,16 @@ os.environ["PSS_DATA_DIR"] = str(APP_DIR / "data")
 os.environ["PSS_LOG_DIR"] = str(APP_DIR / "logs")
 if IS_BUNDLED:
     os.environ["PSS_WEB_DIR"] = str(BUNDLE_DIR / "web")
+    # Ensure bundled pss package is importable
+    if str(BUNDLE_DIR) not in sys.path:
+        sys.path.insert(0, str(BUNDLE_DIR))
 
 try:
     import pystray
     from PIL import Image, ImageDraw
-except ImportError:
-    # Shouldn't happen in bundled mode, but catch for source mode
-    print("Missing dependencies. Run: pip install pystray Pillow")
+except ImportError as e:
+    tray_log.error(f"Missing dependency: {e}")
+    tray_log.error("Run: pip install pystray Pillow")
     sys.exit(1)
 
 
@@ -118,12 +148,19 @@ class PSSServer:
 
         def _run():
             try:
+                tray_log.info("Importing server modules...")
                 import uvicorn
+                tray_log.info("uvicorn imported OK")
                 from pss.database import init_db
+                tray_log.info("pss.database imported OK")
                 from pss.server import app, DB_PATH
+                tray_log.info(f"pss.server imported OK, DB_PATH={DB_PATH}")
 
+                tray_log.info("Initializing database...")
                 init_db(str(DB_PATH))
+                tray_log.info("Database initialized")
 
+                tray_log.info(f"Starting uvicorn on port {PORT}...")
                 config = uvicorn.Config(
                     app, host="0.0.0.0", port=PORT,
                     log_level="info", access_log=False
@@ -131,7 +168,8 @@ class PSSServer:
                 self._uvicorn_server = uvicorn.Server(config)
                 self._uvicorn_server.run()
             except Exception as e:
-                print(f"Server error: {e}", file=sys.stderr)
+                tray_log.error(f"Server failed to start: {e}")
+                tray_log.error(traceback.format_exc())
             finally:
                 with self._lock:
                     self._running = False

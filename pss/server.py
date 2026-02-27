@@ -17,7 +17,7 @@ from pss.database import (
     upsert_enrichment, upsert_steamspy, upsert_deck_protondb,
     get_unenriched_appids, get_steamspy_unenriched_appids,
     get_deck_unenriched_appids, get_all_enriched_appids,
-    get_enrichment_count, bulk_update_app_types,
+    get_enrichment_count, update_app_type, bulk_update_app_types,
     get_exclusions, set_exclusions, toggle_exclusion, bulk_set_exclusions,
     get_full_config, get_config, set_config, set_display_elements,
     get_account_config, set_account_config, delete_account_config, delete_account,

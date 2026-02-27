@@ -2,7 +2,21 @@
 
 A cinematic Ken Burns slideshow screensaver for your Steam game library, with a full web-based customizer UI.
 
-![Status](https://img.shields.io/badge/status-stable-green) ![Python](https://img.shields.io/badge/python-3.11+-blue) ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)
+![Status](https://img.shields.io/badge/status-stable-green) ![Python](https://img.shields.io/badge/python-3.11+-blue) ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey) ![License](https://img.shields.io/badge/license-MIT-green)
+
+<p align="center">
+  <img src="docs/screenshots/screensaver.png" alt="Screensaver" width="800">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/customizer-games.png" alt="Customizer - Games Tab" width="400">
+  <img src="docs/screenshots/customizer-display.png" alt="Customizer - Display Tab" width="400">
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/customizer-settings.png" alt="Customizer - Settings Tab" width="400">
+  <img src="docs/screenshots/tray-menu.png" alt="System Tray Menu" width="250">
+</p>
 
 ---
 

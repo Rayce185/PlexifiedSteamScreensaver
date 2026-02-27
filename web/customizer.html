@@ -1516,7 +1516,7 @@ window.openGamePanel = function(appid) {
     _selOpts + '</select>' +
     '<input id="gp-type-custom" type="text" placeholder="Enter type..." ' +
     'style="display:none;background:var(--bg);color:var(--text);border:1px solid var(--border);font-size:.74rem;padding:2px 6px;border-radius:4px;width:90px" ' +
-    'onkeydown="if(event.key===\'Enter\')confirmCustomType('+appid+')">' +
+    'onkeydown="if(event.key===&quot;Enter&quot;)confirmCustomType('+appid+')">' +
     '<button id="gp-type-ok" class="btn btn-sm" onclick="confirmCustomType('+appid+')" ' +
     'style="display:none;padding:1px 6px;font-size:.7rem">\u2713</button></span>';
 
@@ -2565,7 +2565,7 @@ window.loadTypeManager=async function(){
       h+='<td>'+esc(label)+'<span style="color:var(--text-faint);font-weight:400;margin-left:6px;font-size:.72rem">'+esc(s.type)+'</span></td>';
       h+='<td class="tm-count">'+s.count+'</td>';
       h+='<td class="tm-actions" onclick="event.stopPropagation()">';
-      h+='<button class="btn btn-sm" onclick="renameTypeStart('+i+',''+esc(s.type)+'')" style="padding:1px 6px;font-size:.7rem" title="Rename all '+s.count+' items">&#9998; Rename</button>';
+      h+='<button class="btn btn-sm" onclick="renameTypeStart('+i+',\\x27'+esc(s.type)+'\\x27)" style="padding:1px 6px;font-size:.7rem" title="Rename all '+s.count+' items">&#9998; Rename</button>';
       h+='</td></tr>';
       h+='<tr class="tm-games" id="tm-games-'+i+'"><td colspan="3">';
       h+='<div id="tm-rename-'+i+'" style="display:none;margin-bottom:8px;display:none;align-items:center;gap:6px"></div>';
@@ -2605,7 +2605,7 @@ window.renameTypeStart=function(idx,oldType){
     '<select id="tm-rename-sel-'+idx+'" onchange="tmRenameSelChange('+idx+')" style="background:var(--bg);color:var(--text);border:1px solid var(--border);font-size:.78rem;padding:2px 6px;border-radius:4px">'+
     '<option value="">Select...</option>'+opts+'</select>'+
     '<input id="tm-rename-inp-'+idx+'" type="text" class="tm-rename-input" placeholder="Custom type..." style="display:none">'+
-    '<button class="btn btn-sm btn-accent" onclick="renameTypeConfirm('+idx+',''+esc(oldType)+'')" style="padding:1px 8px;font-size:.72rem">Apply</button>'+
+    '<button class="btn btn-sm btn-accent" onclick="renameTypeConfirm('+idx+',\\x27'+esc(oldType)+'\\x27)" style="padding:1px 8px;font-size:.72rem">Apply</button>'+
     '<button class="btn btn-sm" onclick="document.getElementById('tm-rename-'+idx+'').style.display='none'" style="padding:1px 8px;font-size:.72rem">Cancel</button>';
 };
 

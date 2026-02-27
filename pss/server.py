@@ -2270,7 +2270,7 @@ async def api_set_game_type(appid: int, request: Request):
 @app.get("/api/type-stats")
 async def api_type_stats():
     """Get all distinct types with counts and game lists."""
-    acct = _active_account()
+    acct = get_active_account()
     if not acct:
         return JSONResponse({"error": "No active account"}, status_code=400)
     stats = get_type_stats(acct["steamid64"])
@@ -2290,9 +2290,6 @@ async def api_type_rename(request: Request):
     count = rename_type(old_type, new_type)
     log.info(f"Type rename: {old_type} -> {new_type} ({count} games)")
     return JSONResponse({"ok": True, "old_type": old_type, "new_type": new_type, "count": count})
-    if "error" in result:
-        return JSONResponse(result, status_code=400 if result["error"] == "No active account" else 500)
-    return JSONResponse(result)
 
 
 

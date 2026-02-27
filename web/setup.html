@@ -171,15 +171,17 @@ async function detect() {
     st.textContent = accounts.length + ' account(s) found!';
     btn.disabled = false;
 
-    // Check if API key already exists (e.g. from .env)
-    const cfgR = await fetch('/api/config');
-    if (cfgR.ok) {
-      const cfg = await cfgR.json();
-      // Check per-account keys
-      const hasKey = accounts.some(a => a.has_api_key);
-      if (hasKey) {
-        st.textContent += ' API key already configured — you can skip to Step 3.';
-      }
+    // Check if any account already has an API key (from previous install or .env)
+    const hasKey = accounts.some(a => a.has_api_key);
+    if (hasKey) {
+      const keyed = accounts.find(a => a.has_api_key);
+      st.textContent += ' API key already configured!';
+      document.getElementById('summary').innerHTML =
+        '<span class="check">✓</span> <strong>' + accounts.length + '</strong> Steam account(s) detected<br>' +
+        '<span class="check">✓</span> API key already configured for <strong>' + (keyed.persona_name || 'account') + '</strong><br>' +
+        'Your game library will load automatically after signing in.';
+      setTimeout(() => goStep(3), 1200);
+      return;
     }
   } catch(e) {
     area.innerHTML = '<div class="status err">Detection failed: ' + e.message + '</div>';

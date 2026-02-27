@@ -109,9 +109,6 @@ class WSManager:
 ws_mgr = WSManager()
 
 import asyncio as _aio
-@app.on_event("startup")
-async def _ws_loop_ref():
-    ws_mgr._loop = _aio.get_running_loop()
 
 
 STEAM_API_KEY = os.environ.get("STEAM_API_KEY", "")
@@ -1121,6 +1118,7 @@ async def vdf_watchdog():
 
 @asynccontextmanager
 async def lifespan(app):
+    ws_mgr._loop = _aio.get_running_loop()
     init_db(str(DB_PATH))
     log.info(f"Database initialized at {DB_PATH}")
     global STEAM_API_KEY, STEAM_PATH

@@ -1228,6 +1228,9 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     path = request.url.path
+    has_cookie = bool(request.cookies.get(SESSION_COOKIE))
+    if path.startswith('/api/') or path in ('/', '/setup', '/login', '/customizer'):
+        log.info(f'REQ {request.method} {path} cookie={has_cookie}')
     # Always open: screensaver, static assets, auth endpoints
     open_paths = ("/screensaver", "/api/auth/", "/favicon")
     if any(path.startswith(p) for p in open_paths):
@@ -1237,6 +1240,7 @@ async def auth_middleware(request: Request, call_next):
     # First run: no accounts OR no API key configured
     needs_setup = not has_accounts() or not has_any_api_key()
     if needs_setup:
+        log.info(f"SETUP REDIRECT {path} - accounts={has_accounts()}, api_key={has_any_api_key()}")
         setup_paths = ("/setup", "/api/accounts", "/api/config")
         if any(path.startswith(p) for p in setup_paths):
             return await call_next(request)
@@ -1256,6 +1260,7 @@ async def auth_middleware(request: Request, call_next):
     # Everything else requires valid Steam session
     session = get_session_from_request(request)
     if not session:
+        log.info(f"AUTH BLOCKED {path} - no valid session (cookie present: {has_cookie})")
         if path.startswith("/api/"):
             return JSONResponse({"error": "Unauthorized", "redirect": "/login"}, status_code=401)
         return RedirectResponse(url="/login")

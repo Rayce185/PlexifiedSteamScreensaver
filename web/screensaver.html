@@ -10,6 +10,8 @@
   :root { --transition: 2.5s; --slide-duration: 12s; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #000; overflow: hidden; cursor: none; width: 100vw; height: 100vh; font-family: 'Outfit', sans-serif; user-select: none; }
+  .fade-guard { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 9999; background: #000; opacity: 1; transition: opacity 1.8s ease-out; pointer-events: none; }
+  .fade-guard.reveal { opacity: 0; }
   .slide { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; opacity: 0; z-index: 1; overflow: hidden; transition: opacity var(--transition) ease-in-out; }
   .slide.active { opacity: 1; z-index: 2; }
   .slide img { position: absolute; width: 100%; height: 100%; top: 0; left: 0; object-fit: cover; will-change: transform; transform-origin: center center; }
@@ -63,6 +65,7 @@
 </head>
 <body>
 <div class="loading" id="loading">LOADING LIBRARY...</div>
+<div id="fade-guard" class="fade-guard"></div>
 <div class="vignette"></div>
 <div class="bottom-grad"></div>
 <div class="slide" id="slide-a"><img id="img-a" alt=""></div>
@@ -300,16 +303,22 @@
 
 
   // === DISMISS ON INPUT (screensaver behavior) ===
-  // Only active in native pywebview mode, not browser preview
   (function(){
     const params=new URLSearchParams(window.location.search);
-    if(params.get('preview')==='1') return; // browser preview — don't auto-dismiss
+    if(params.get('preview')==='1'){
+      // Browser preview — skip dismiss, remove fade guard immediately
+      const fg=document.getElementById('fade-guard');
+      if(fg) fg.style.display='none';
+      return;
+    }
     let armed=false;
-    // Grace period: ignore input for 2s after load (prevents immediate dismiss from mouse position)
-    setTimeout(()=>{armed=true},2000);
+    const guard=document.getElementById('fade-guard');
+    // Fade from black: reveal content over 1.8s, arm dismiss after 2s
+    requestAnimationFrame(()=>{if(guard)guard.classList.add('reveal')});
+    setTimeout(()=>{armed=true;if(guard)guard.remove()},2000);
     function dismiss(){
       if(!armed) return;
-      armed=false; // prevent double-fire
+      armed=false;
       if(window.pywebview&&window.pywebview.api&&window.pywebview.api.dismiss){
         window.pywebview.api.dismiss();
       }else{

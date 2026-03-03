@@ -92,13 +92,13 @@ except ImportError as e:
     tray_log.error("Run: pip install pystray Pillow")
     sys.exit(1)
 
-# pywebview: native screensaver window (optional — falls back to browser)
-HAS_WEBVIEW = False
+# pywebview: native screensaver window
 try:
     import webview
-    HAS_WEBVIEW = True
-except ImportError:
-    tray_log.info("pywebview not installed — screensaver will use system browser")
+except ImportError as e:
+    tray_log.error(f"Missing dependency: {e}")
+    tray_log.error("Run: pip install pywebview")
+    sys.exit(1)
 
 
 
@@ -135,8 +135,7 @@ def launch_screensaver_native(port):
         )
         webview.start()  # blocks until window is destroyed
     except Exception as e:
-        tray_log.warning(f"pywebview failed: {e} — falling back to browser")
-        webbrowser.open(f"http://localhost:{port}/screensaver")
+        tray_log.error(f"pywebview screensaver failed: {e}")
     finally:
         _screensaver_active = False
 
@@ -440,10 +439,7 @@ class PSSTray:
         webbrowser.open(f"http://localhost:{PORT}/customizer")
 
     def on_open_screensaver(self, icon, item):
-        if HAS_WEBVIEW:
-            threading.Thread(target=launch_screensaver_native, args=(PORT,), daemon=True).start()
-        else:
-            webbrowser.open(f"http://localhost:{PORT}/screensaver")
+        threading.Thread(target=launch_screensaver_native, args=(PORT,), daemon=True).start()
 
     def on_start(self, icon, item):
         if self.server.running:

@@ -92,6 +92,54 @@ except ImportError as e:
     tray_log.error("Run: pip install pystray Pillow")
     sys.exit(1)
 
+# pywebview: native screensaver window (optional — falls back to browser)
+HAS_WEBVIEW = False
+try:
+    import webview
+    HAS_WEBVIEW = True
+except ImportError:
+    tray_log.info("pywebview not installed — screensaver will use system browser")
+
+
+
+# ── Native Screensaver Window ──
+
+_screensaver_active = False
+
+class ScreensaverApi:
+    """JS API exposed to screensaver.html via pywebview."""
+    def dismiss(self):
+        global _screensaver_active
+        _screensaver_active = False
+        try:
+            for w in webview.windows:
+                w.destroy()
+        except Exception:
+            pass
+
+def launch_screensaver_native(port):
+    """Open screensaver in a native fullscreen window. Blocks until dismissed."""
+    global _screensaver_active
+    if _screensaver_active:
+        return
+    _screensaver_active = True
+    try:
+        api = ScreensaverApi()
+        window = webview.create_window(
+            "PSS Screensaver",
+            f"http://localhost:{port}/screensaver",
+            fullscreen=True,
+            frameless=True,
+            on_top=True,
+            js_api=api,
+        )
+        webview.start()  # blocks until window is destroyed
+    except Exception as e:
+        tray_log.warning(f"pywebview failed: {e} — falling back to browser")
+        webbrowser.open(f"http://localhost:{port}/screensaver")
+    finally:
+        _screensaver_active = False
+
 
 # ── Icon Generation ──
 
@@ -392,7 +440,10 @@ class PSSTray:
         webbrowser.open(f"http://localhost:{PORT}/customizer")
 
     def on_open_screensaver(self, icon, item):
-        webbrowser.open(f"http://localhost:{PORT}/screensaver")
+        if HAS_WEBVIEW:
+            threading.Thread(target=launch_screensaver_native, args=(PORT,), daemon=True).start()
+        else:
+            webbrowser.open(f"http://localhost:{PORT}/screensaver")
 
     def on_start(self, icon, item):
         if self.server.running:

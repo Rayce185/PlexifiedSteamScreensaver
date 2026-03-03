@@ -298,6 +298,30 @@
     });
   }
 
+
+  // === DISMISS ON INPUT (screensaver behavior) ===
+  // Only active in native pywebview mode, not browser preview
+  (function(){
+    const params=new URLSearchParams(window.location.search);
+    if(params.get('preview')==='1') return; // browser preview — don't auto-dismiss
+    let armed=false;
+    // Grace period: ignore input for 2s after load (prevents immediate dismiss from mouse position)
+    setTimeout(()=>{armed=true},2000);
+    function dismiss(){
+      if(!armed) return;
+      armed=false; // prevent double-fire
+      if(window.pywebview&&window.pywebview.api&&window.pywebview.api.dismiss){
+        window.pywebview.api.dismiss();
+      }else{
+        try{window.close()}catch(e){}
+      }
+    }
+    let moveCount=0;
+    document.addEventListener('mousemove',()=>{moveCount++;if(moveCount>2)dismiss()});
+    document.addEventListener('keydown',dismiss);
+    document.addEventListener('mousedown',dismiss);
+  })();
+
   init();
 })();
 </script>

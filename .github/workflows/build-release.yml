@@ -51,7 +51,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgirepository1.0-dev libcairo2-dev gir1.2-ayatanaappindicator3-0.1
+          sudo apt-get install -y libgirepository1.0-dev libcairo2-dev gir1.2-ayatanaappindicator3-0.1 libwebkit2gtk-4.1-dev || true
 
       - name: Install Python dependencies
         run: |

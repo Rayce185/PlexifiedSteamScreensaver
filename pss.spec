@@ -43,6 +43,12 @@ a = Analysis(
         'pss',
         'pss.server',
         'pss.database',
+        # pywebview backends
+        'webview',
+        'webview.platforms',
+        'webview.platforms.edgechromium',
+        'webview.platforms.cef',
+        'webview.platforms.winforms',
     ],
     hookspath=[],
     hooksconfig={},

@@ -61,7 +61,7 @@ No Python install needed — everything is bundled.
 
 | Action | What happens |
 |--------|-------------|
-| **Double-click tray icon** | Opens the Customizer UI in your browser |
+| **Double-click tray icon** | Opens the Customizer in your default browser |
 | **Right-click tray icon** | Start / Stop / Restart / Auto-start with OS / Check for Updates / Quit |
 | First run | Browser opens setup page → enter Steam API key → library loads automatically |
 
@@ -84,6 +84,7 @@ No Python install needed — everything is bundled.
 ## Features
 
 ### Screensaver
+- **Native fullscreen window** — launches via system tray, not in a browser. Dismisses on any mouse/keyboard input (real screensaver behavior)
 - **Ken Burns slideshow** — 8 animation variants with configurable intensity and timing
 - **Multi-row display elements** — 14+ data badges across configurable rows with per-row sizing (SM/MD/LG) and color/mono modes
 - **WYSIWYG layout editor** — drag game info and clock overlays anywhere on screen via the Display tab
@@ -146,8 +147,8 @@ On first launch the server will:
 4. Scan local manifests for installed tools/software
 
 Open in browser:
-- **Customizer**: http://localhost:8787/customizer
-- **Screensaver**: http://localhost:8787/screensaver
+- **Customizer**: http://localhost:8787/customizer (opens in your default browser)
+- **Screensaver**: launched natively via tray menu (or http://localhost:8787/screensaver for browser preview)
 
 ### Enrichment (recommended)
 
@@ -178,7 +179,7 @@ python3 pss_tray.pyw
 ### Tray Menu
 
 - **Open Customizer** (double-click) — opens `http://localhost:8787/customizer`
-- **Open Screensaver** — opens the fullscreen screensaver
+- **Open Screensaver** — launches a native fullscreen window (not a browser). Dismisses on any input
 - **Start / Stop / Restart Server** — manage the server process
 - **Start with OS** — toggle auto-launch at login (Windows: Startup folder shortcut, Linux: XDG autostart)
 - **Check for Updates** — checks GitHub for new releases, opens download page if available

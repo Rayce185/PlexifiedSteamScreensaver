@@ -523,7 +523,7 @@ class PSSTray:
             pystray.MenuItem("Quit", self.on_quit),
         )
 
-    def run(self, autostart_server=True):
+    def run(self, autostart_server=True, open_browser=True):
         self.icon = pystray.Icon(
             name="PSS",
             icon=ICON_STOPPED,
@@ -536,11 +536,12 @@ class PSSTray:
             self.icon.title = "PSS — Starting..."
             threading.Thread(target=self._do_start, daemon=True).start()
 
-            # Open browser after server starts
-            def _open_browser():
-                time.sleep(4)
-                webbrowser.open(f"http://localhost:{PORT}/customizer")
-            threading.Thread(target=_open_browser, daemon=True).start()
+            # Open browser after server starts (skipped with --no-browser)
+            if open_browser:
+                def _open_browser():
+                    time.sleep(4)
+                    webbrowser.open(f"http://localhost:{PORT}/customizer")
+                threading.Thread(target=_open_browser, daemon=True).start()
 
         # Initial update check
         threading.Thread(target=lambda: setattr(self, '_update_info', check_for_updates()), daemon=True).start()
@@ -553,8 +554,9 @@ class PSSTray:
 
 def main():
     no_server = "--no-server" in sys.argv
+    no_browser = "--no-browser" in sys.argv
     tray = PSSTray()
-    tray.run(autostart_server=not no_server)
+    tray.run(autostart_server=not no_server, open_browser=not no_browser)
 
 
 if __name__ == "__main__":
